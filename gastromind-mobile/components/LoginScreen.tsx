@@ -1,3 +1,5 @@
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChefHat, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
@@ -13,6 +15,14 @@ import {
   View,
 } from 'react-native';
 
+// 1. Definimos los tipos de nuestras rutas para TypeScript
+type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+};
+
+type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
+
 const { width, height } = Dimensions.get('window');
 
 const COLORS = {
@@ -27,11 +37,15 @@ const COLORS = {
 const PremiumLogin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // 2. Inicializamos la navegación con su tipado correcto
+  const navigation = useNavigation<LoginScreenNavigationProp>();
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
+      {/* Círculos decorativos de fondo */}
       <View style={[styles.circle, styles.circle1]} />
       <View style={[styles.circle, styles.circle2]} />
       <View style={[styles.circle, styles.circle3]} />
@@ -62,6 +76,8 @@ const PremiumLogin: React.FC = () => {
               style={styles.input}
               placeholder="Tu correo"
               placeholderTextColor="#99aab5"
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
           </View>
 
@@ -97,9 +113,10 @@ const PremiumLogin: React.FC = () => {
           </TouchableOpacity>
         </View>
 
+        {/* 3. Footer conectado correctamente a la pantalla de Registro */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>¿Nuevo por aquí? </Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
             <Text style={styles.signUpText}>Crea una cuenta</Text>
           </TouchableOpacity>
         </View>
@@ -113,7 +130,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  
   circle: {
     position: 'absolute',
     borderRadius: 1000,
@@ -157,7 +173,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     transform: [{ rotate: '-10deg' }],
-    
     elevation: 10,
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 10 },
