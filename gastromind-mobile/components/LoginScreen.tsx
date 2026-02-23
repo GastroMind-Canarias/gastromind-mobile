@@ -1,181 +1,267 @@
+import { ChefHat, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    ColorValue,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable, // Usamos Pressable para animaciones personalizadas
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    useColorScheme,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import Animated, {
-    FadeInDown,
-    FadeInUp,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring
-} from 'react-native-reanimated';
 
-// --- Interfaces ---
-interface ThemeColors {
-  text: ColorValue;
-  background: ColorValue;
-  primary: ColorValue;
-  secondary: ColorValue;
-  accent: ColorValue;
-  placeholder: string;
-  inputBg: ColorValue;
-}
+const { width, height } = Dimensions.get('window');
 
-const LoginScreen: React.FC = () => {
-  const isDarkMode = useColorScheme() === 'dark';
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
+const COLORS = {
+  text: '#0f1510',
+  background: '#f1f9f4',
+  primary: '#4dc763',
+  secondary: '#86e998',
+  accent: '#FF9F1C', 
+  white: '#ffffff',
+};
 
-  const buttonScale = useSharedValue(1);
-
-  const theme: ThemeColors = {
-    text: isDarkMode ? '#eaf0eb' : '#0f1510',
-    background: isDarkMode ? '#060e09' : '#f1f9f4',
-    primary: isDarkMode ? '#38b24f' : '#4dc763',
-    secondary: isDarkMode ? '#167928' : '#86e998',
-    accent: isDarkMode ? '#0dbf2e' : '#40f261',
-    placeholder: isDarkMode ? '#5a6b5d' : '#a0b0a5',
-    inputBg: isDarkMode ? '#121c15' : '#ffffff',
-  };
-
-  const animatedButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: buttonScale.value }],
-  }));
-
-  const handlePressIn = () => (buttonScale.value = withSpring(0.95));
-  const handlePressOut = () => (buttonScale.value = withSpring(1));
+const PremiumLogin: React.FC = () => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <KeyboardAvoidingView 
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      <View style={[styles.circle, styles.circle1]} />
+      <View style={[styles.circle, styles.circle2]} />
+      <View style={[styles.circle, styles.circle3]} />
+
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
-        <Animated.View 
-          entering={FadeInDown.duration(800).delay(200)}
-          style={styles.header}
-        >
-          <Text style={[styles.title, { color: theme.text }]}>Bienvenido a Gastromind</Text>
-          <Text style={[styles.subtitle, { color: theme.text, opacity: 0.7 }]}>
-            Inicia sesión para continuar
-          </Text>
-        </Animated.View>
+        <View style={styles.logoContainer}>
+          <View style={styles.iconCircle}>
+            <ChefHat size={32} color={COLORS.white} />
+            <View style={styles.sparkleTag}>
+              <Sparkles size={12} color={COLORS.white} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.header}>
+          <Text style={styles.brandName}>gastromind</Text>
+          <View style={styles.accentBar} />
+          <Text style={styles.subtitle}>Crea recetas con inteligencia</Text>
+        </View>
 
         <View style={styles.form}>
-          <Animated.View 
-            entering={FadeInUp.duration(600).delay(400)}
-            style={styles.inputContainer}
-          >
-            <Text style={[styles.label, { color: theme.text }]}>Correo Electrónico</Text>
+          <View style={styles.inputWrapper}>
+            <Mail size={20} color={COLORS.text} style={styles.inputIcon} />
             <TextInput
-              style={[styles.input, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.secondary }]}
-              placeholder="ejemplo@correo.com"
-              placeholderTextColor={theme.placeholder}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
+              style={styles.input}
+              placeholder="Tu correo"
+              placeholderTextColor="#99aab5"
             />
-          </Animated.View>
+          </View>
 
-          <Animated.View 
-            entering={FadeInUp.duration(600).delay(600)}
-            style={styles.inputContainer}
-          >
-            <Text style={[styles.label, { color: theme.text }]}>Contraseña</Text>
+          <View style={styles.inputWrapper}>
+            <Lock size={20} color={COLORS.text} style={styles.inputIcon} />
             <TextInput
-              style={[styles.input, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.secondary }]}
-              placeholder="********"
-              placeholderTextColor={theme.placeholder}
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
+              style={styles.input}
+              placeholder="Tu contraseña"
+              placeholderTextColor="#99aab5"
+              secureTextEntry={!showPassword}
             />
-          </Animated.View>
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              {showPassword ? <EyeOff size={20} color={COLORS.accent} /> : <Eye size={20} color={COLORS.text} opacity={0.4} />}
+            </TouchableOpacity>
+          </View>
 
-          <Animated.View entering={FadeInUp.duration(600).delay(800)}>
-            <Pressable
-              onPressIn={handlePressIn}
-              onPressOut={handlePressOut}
-              onPress={() => console.log('Login press')}
-            >
-              <Animated.View 
-                style={[
-                  styles.button, 
-                  { backgroundColor: theme.primary, shadowColor: theme.primary },
-                  animatedButtonStyle
-                ]}
-              >
-                <Text style={styles.buttonText}>Entrar</Text>
-              </Animated.View>
-            </Pressable>
-          </Animated.View>
+          <TouchableOpacity style={styles.forgotPass}>
+            <Text style={styles.forgotText}>¿Olvidaste la clave?</Text>
+          </TouchableOpacity>
 
-          <Animated.View 
-            entering={FadeInUp.duration(600).delay(1000)}
-            style={styles.footer}
+          <TouchableOpacity 
+            style={styles.mainButton}
+            onPress={() => {
+              setLoading(true);
+              setTimeout(() => setLoading(false), 2000);
+            }}
           >
-            <Text style={[styles.footerText, { color: theme.text }]}>¿No tienes cuenta? </Text>
-            <Pressable>
-              <Text style={[styles.signUpLink, { color: theme.primary }]}>Regístrate</Text>
-            </Pressable>
-          </Animated.View>
+            {loading ? (
+              <ActivityIndicator color={COLORS.white} />
+            ) : (
+              <Text style={styles.buttonText}>Entrar a la cocina</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>¿Nuevo por aquí? </Text>
+          <TouchableOpacity>
+            <Text style={styles.signUpText}>Crea una cuenta</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, paddingHorizontal: 32, justifyContent: 'center' },
-  header: { marginBottom: 48 },
-  logoSquare: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    marginBottom: 24,
-    transform: [{ rotate: '12deg' }],
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  
+  circle: {
+    position: 'absolute',
+    borderRadius: 1000,
+    opacity: 0.15,
+  },
+  circle1: {
+    width: 300,
+    height: 300,
+    backgroundColor: COLORS.primary,
+    top: -50,
+    right: -100,
+  },
+  circle2: {
+    width: 200,
+    height: 200,
+    backgroundColor: COLORS.accent,
+    bottom: -50,
+    left: -60,
+  },
+  circle3: {
+    width: 150,
+    height: 150,
+    backgroundColor: COLORS.secondary,
+    top: height * 0.4,
+    left: -40,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 35,
+    justifyContent: 'center',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  iconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 25,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    transform: [{ rotate: '-10deg' }],
+    
+    elevation: 10,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
-    elevation: 4,
   },
-  title: { fontSize: 36, fontWeight: '800', letterSpacing: -1 },
-  subtitle: { fontSize: 18, marginTop: 4 },
-  form: { width: '100%' },
-  inputContainer: { marginBottom: 20 },
-  label: { fontSize: 13, fontWeight: '700', marginBottom: 8, marginLeft: 4, textTransform: 'uppercase', opacity: 0.8 },
-  input: {
-    height: 60,
-    borderRadius: 20,
+  sparkleTag: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: COLORS.accent,
+    padding: 6,
+    borderRadius: 12,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  brandName: {
+    fontSize: 40,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: -1.5,
+  },
+  accentBar: {
+    width: 40,
+    height: 5,
+    backgroundColor: COLORS.accent,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: COLORS.text,
+    opacity: 0.6,
+    marginTop: 10,
+    fontWeight: '500',
+  },
+  form: {
+    width: '100%',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    height: 65,
+    borderRadius: 20, 
     paddingHorizontal: 20,
-    fontSize: 16,
-    borderWidth: 1.5,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e8f5ed',
   },
-  button: {
-    height: 60,
+  inputIcon: {
+    marginRight: 15,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  forgotPass: {
+    alignSelf: 'flex-end',
+    marginBottom: 30,
+    paddingRight: 5,
+  },
+  forgotText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '500',
+    opacity: 0.5,
+  },
+  mainButton: {
+    backgroundColor: COLORS.primary,
+    height: 65,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    elevation: 4,
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.2,
     shadowRadius: 12,
-    elevation: 6,
   },
-  buttonText: { color: '#ffffff', fontSize: 18, fontWeight: '800' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 32 },
-  footerText: { fontSize: 15, opacity: 0.7 },
-  signUpLink: { fontSize: 15, fontWeight: '800' },
+  buttonText: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 40,
+  },
+  footerText: {
+    fontSize: 15,
+    color: COLORS.text,
+    opacity: 0.6,
+  },
+  signUpText: {
+    fontSize: 15,
+    color: COLORS.accent, 
+    fontWeight: '800',
+  },
 });
 
-export default LoginScreen;
+export default PremiumLogin;
