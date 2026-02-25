@@ -14,27 +14,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-
-// 1. Definimos los tipos de nuestras rutas para TypeScript
-type AuthStackParamList = {
-  Login: undefined;
-  Register: undefined;
-};
+import { COLORS } from '../../../shared/theme/colors';
+import { AuthStackParamList } from '../navigation/types';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
 const { width, height } = Dimensions.get('window');
 
-const COLORS = {
-  text: '#0f1510',
-  background: '#f1f9f4',
-  primary: '#4dc763',
-  secondary: '#86e998',
-  accent: '#FF9F1C', 
-  white: '#ffffff',
-};
-
-const PremiumLogin: React.FC = () => {
+const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -279,4 +266,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PremiumLogin;
+export default LoginScreen;
