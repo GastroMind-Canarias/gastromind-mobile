@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChefHat, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -18,82 +18,89 @@ import { COLORS } from '../../../shared/theme/colors';
 import { AuthStackParamList } from '../navigation/types';
 import { CustomInput } from '../components/CustomInput';
 import { CustomButton } from '../components/CustomButton';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AuthContext } from '../navigation/AuthContext';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
 const { width, height } = Dimensions.get('window');
 
 const LoginScreen: React.FC = () => {
-  const [showPassword, setShowPassword] = useState(false);
+  const { login } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
 
   const navigation = useNavigation<LoginScreenNavigationProp>();
+
+  const handleLogin = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      login();
+    }, 1500);
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Círculos decorativos de fondo */}
       <View style={[styles.circle, styles.circle1]} />
       <View style={[styles.circle, styles.circle2]} />
       <View style={[styles.circle, styles.circle3]} />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
-      >
-        <View style={styles.logoContainer}>
-          <View style={styles.iconCircle}>
-            <ChefHat size={32} color={COLORS.white} />
-            <View style={styles.sparkleTag}>
-              <Sparkles size={12} color={COLORS.white} />
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.content}
+        >
+          <View style={styles.logoContainer}>
+            <View style={styles.iconCircle}>
+              <ChefHat size={32} color={COLORS.white} />
+              <View style={styles.sparkleTag}>
+                <Sparkles size={12} color={COLORS.white} />
+              </View>
             </View>
           </View>
-        </View>
 
-        <View style={styles.header}>
-          <Text style={styles.brandName}>gastromind</Text>
-          <View style={styles.accentBar} />
-          <Text style={styles.subtitle}>Crea recetas con inteligencia</Text>
-        </View>
+          <View style={styles.header}>
+            <Text style={styles.brandName}>gastromind</Text>
+            <View style={styles.accentBar} />
+            <Text style={styles.subtitle}>Crea recetas con inteligencia</Text>
+          </View>
 
-        <View style={styles.form}>
-          <CustomInput
-            icon={Mail}
-            placeholder="Tu correo"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
+          <View style={styles.form}>
+            <CustomInput
+              icon={Mail}
+              placeholder="Tu correo"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
 
-          <CustomInput
-            icon={Lock}
-            placeholder="Tu contraseña"
-            isPassword={true}
-            autoCapitalize="none"
-          />
+            <CustomInput
+              icon={Lock}
+              placeholder="Tu contraseña"
+              isPassword={true}
+              autoCapitalize="none"
+            />
 
-          <TouchableOpacity style={styles.forgotPass}>
-            <Text style={styles.forgotText}>¿Olvidaste la clave?</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.forgotPass}>
+              <Text style={styles.forgotText}>¿Olvidaste la clave?</Text>
+            </TouchableOpacity>
 
-          <CustomButton
-            title="Entrar a la cocina"
-            onPress={() => {
-              setLoading(true);
-              setTimeout(() => setLoading(false), 2000);
-            }}
-            loading={loading}
-          />
-        </View>
+            <CustomButton
+              title="Entrar a la cocina"
+              onPress={handleLogin}
+              loading={loading}
+            />
+          </View>
 
-        {/* 3. Footer conectado correctamente a la pantalla de Registro */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>¿Nuevo por aquí? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.signUpText}>Crea una cuenta</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>¿Nuevo por aquí? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.signUpText}>Crea una cuenta</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </View>
   );
 };
