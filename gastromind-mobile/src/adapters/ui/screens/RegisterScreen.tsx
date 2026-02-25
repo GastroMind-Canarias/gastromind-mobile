@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { AuthNavigationProp } from '../navigation/types';
 import { COLORS } from '../../../shared/theme/colors';
+import { CustomButton } from '../components/CustomButton';
+import { CustomInput } from '../components/CustomInput';
 
 const { width, height } = Dimensions.get('window');
 
@@ -41,10 +43,8 @@ const RegisterScreen: React.FC = () => {
         setError(null);
         setLoading(true);
 
-        // Simulación de registro
         setTimeout(() => {
             setLoading(false);
-            // Aquí redirigirías al Home tras el registro exitoso
         }, 2000);
     };
 
@@ -90,72 +90,37 @@ const RegisterScreen: React.FC = () => {
                     </View>
 
                     <View style={styles.form}>
-                        {/* Input Usuario */}
-                        <View style={styles.inputWrapper}>
-                            <User size={20} color={COLORS.text} style={styles.inputIcon} opacity={0.5} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Nombre de usuario"
-                                placeholderTextColor="#99aab5"
-                                autoCapitalize="none"
-                                value={form.username}
-                                onChangeText={(text) => setForm({ ...form, username: text })}
-                            />
-                        </View>
+                        <CustomInput
+                            icon={User}
+                            placeholder="Nombre de usuario"
+                            value={form.username}
+                            autoCapitalize="none"
+                            onChangeText={(text) => setForm({ ...form, username: text })}
+                        />
 
-                        {/* Input Contraseña */}
-                        <View style={styles.inputWrapper}>
-                            <Lock size={20} color={COLORS.text} style={styles.inputIcon} opacity={0.5} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Contraseña"
-                                placeholderTextColor="#99aab5"
-                                secureTextEntry={!showPassword}
-                                value={form.password}
-                                onChangeText={(text) => setForm({ ...form, password: text })}
-                            />
-                            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                                {showPassword ? (
-                                    <EyeOff size={20} color={COLORS.accent} />
-                                ) : (
-                                    <Eye size={20} color={COLORS.text} opacity={0.4} />
-                                )}
-                            </TouchableOpacity>
-                        </View>
+                        <CustomInput
+                            icon={Lock}
+                            placeholder="Contraseña"
+                            isPassword={true}
+                            value={form.password}
+                            autoCapitalize="none"
+                            onChangeText={(text) => setForm({ ...form, password: text })}
+                        />
 
-                        {/* Input Confirmar Contraseña */}
-                        <View style={[styles.inputWrapper, error ? styles.inputError : null]}>
-                            <Lock size={20} color={COLORS.text} style={styles.inputIcon} opacity={0.5} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Confirma tu contraseña"
-                                placeholderTextColor="#99aab5"
-                                secureTextEntry={!showConfirmPassword}
-                                value={form.confirmPassword}
-                                onChangeText={(text) => setForm({ ...form, confirmPassword: text })}
-                            />
-                            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                                {showConfirmPassword ? (
-                                    <EyeOff size={20} color={COLORS.accent} />
-                                ) : (
-                                    <Eye size={20} color={COLORS.text} opacity={0.4} />
-                                )}
-                            </TouchableOpacity>
-                        </View>
+                        <CustomInput
+                            icon={Lock}
+                            placeholder="Confirma tu contraseña"
+                            isPassword={true}
+                            value={form.confirmPassword}
+                            autoCapitalize="none"
+                            onChangeText={(text) => setForm({ ...form, confirmPassword: text })}
+                        />
 
-                        {error && <Text style={styles.errorText}>{error}</Text>}
-
-                        <TouchableOpacity
-                            style={styles.mainButton}
+                        <CustomButton
+                            title="Crear cuenta"
                             onPress={handleRegister}
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <ActivityIndicator color={COLORS.white} />
-                            ) : (
-                                <Text style={styles.buttonText}>Crear cuenta</Text>
-                            )}
-                        </TouchableOpacity>
+                            loading={loading}
+                        />
                     </View>
 
                     <View style={styles.footer}>
@@ -225,7 +190,7 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.primary,
         justifyContent: 'center',
         alignItems: 'center',
-        transform: [{ rotate: '10deg' }], // Rotación inversa al login para dinamismo
+        transform: [{ rotate: '10deg' }],
         elevation: 10,
         shadowColor: COLORS.primary,
         shadowOffset: { width: 0, height: 10 },
@@ -235,7 +200,7 @@ const styles = StyleSheet.create({
     sparkleTag: {
         position: 'absolute',
         top: -5,
-        left: -5, // Cambiado de lado
+        left: -5,
         backgroundColor: COLORS.accent,
         padding: 6,
         borderRadius: 12,
@@ -267,53 +232,12 @@ const styles = StyleSheet.create({
     form: {
         width: '100%',
     },
-    inputWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.white,
-        height: 65,
-        borderRadius: 20,
-        paddingHorizontal: 20,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: '#e8f5ed',
-    },
-    inputError: {
-        borderColor: COLORS.error,
-    },
-    inputIcon: {
-        marginRight: 15,
-    },
-    input: {
-        flex: 1,
-        fontSize: 16,
-        color: COLORS.text,
-        fontWeight: '600',
-    },
     errorText: {
         color: COLORS.error,
         fontSize: 13,
         textAlign: 'center',
         marginBottom: 15,
         marginTop: -5,
-    },
-    mainButton: {
-        backgroundColor: COLORS.primary,
-        height: 65,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 4,
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
-        marginTop: 10,
-    },
-    buttonText: {
-        color: COLORS.white,
-        fontSize: 18,
-        fontWeight: '800',
     },
     footer: {
         flexDirection: 'row',
