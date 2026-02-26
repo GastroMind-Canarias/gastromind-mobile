@@ -1,8 +1,8 @@
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, ChefHat, Eye, EyeOff, Lock, Sparkles, User } from 'lucide-react-native';
+import { ArrowLeft, ChefHat, Lock, Mail, Sparkles, User } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
+    Alert,
     Dimensions,
     KeyboardAvoidingView,
     Platform,
@@ -10,52 +10,68 @@ import {
     StatusBar,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { AuthNavigationProp } from '../navigation/types';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../../shared/theme/colors';
 import { CustomButton } from '../components/CustomButton';
 import { CustomInput } from '../components/CustomInput';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../hooks/useAuth';
+import { AuthNavigationProp } from '../navigation/types';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 const RegisterScreen: React.FC = () => {
     const navigation = useNavigation<AuthNavigationProp>();
 
-    const [form, setForm] = useState({ username: '', password: '', confirmPassword: '' });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { signUp, loading, error: apiError } = useAuth();
 
-    const handleRegister = () => {
-        if (!form.username || !form.password || !form.confirmPassword) {
-            setError('Por favor, completa todos los campos');
+    const [form, setForm] = useState({
+        username: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
+    });
+    const [localError, setLocalError] = useState<string | null>(null);
+
+    const handleRegister = async () => {
+        if (!form.username || !form.email || !form.password || !form.confirmPassword) {
+            setLocalError('Por favor, completa todos los campos');
             return;
         }
         if (form.password !== form.confirmPassword) {
-            setError('Las contraseñas no coinciden');
+            setLocalError('Las contraseñas no coinciden');
             return;
         }
 
-        setError(null);
-        setLoading(true);
+        setLocalError(null);
 
-        setTimeout(() => {
-            setLoading(false);
-        }, 2000);
+        try {
+            await signUp({
+                username: form.username,
+                email: form.email,
+                password: form.password,
+                role: 'ROLE_MEMBER'
+            });
+
+            Alert.alert(
+                "¡Bienvenido, Chef!",
+                "Tu cuenta ha sido creada con éxito. Ya puedes iniciar sesión.",
+                [{ text: "Ir al Login", onPress: () => navigation.navigate('Login') }]
+            );
+        } catch (e) {
+            console.error("Error en registro:", e);
+        }
     };
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" />
 
-            {/* Círculos de fondo */}
             <View style={[styles.circle, styles.circle1]} />
             <View style={[styles.circle, styles.circle2]} />
 
-            {/* Envolvemos todo en SafeAreaView */}
             <SafeAreaView style={{ flex: 1 }}>
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -66,7 +82,6 @@ const RegisterScreen: React.FC = () => {
                         showsVerticalScrollIndicator={false}
                         keyboardShouldPersistTaps="handled"
                     >
-                        {/* Ahora este botón siempre estará en zona segura */}
                         <TouchableOpacity
                             style={styles.backButton}
                             onPress={() => navigation.goBack()}
@@ -74,7 +89,6 @@ const RegisterScreen: React.FC = () => {
                             <ArrowLeft size={24} color={COLORS.text} />
                         </TouchableOpacity>
 
-                        {/* Logo / Icono Superior */}
                         <View style={styles.logoContainer}>
                             <View style={styles.iconCircle}>
                                 <ChefHat size={32} color={COLORS.white} />
@@ -91,12 +105,26 @@ const RegisterScreen: React.FC = () => {
                         </View>
 
                         <View style={styles.form}>
+                            {/* Mostrar errores (locales o de API) */}
+                            {(localError || apiError) && (
+                                <Text style={styles.errorText}>{localError || apiError}</Text>
+                            )}
+
                             <CustomInput
                                 icon={User}
                                 placeholder="Nombre de usuario"
                                 value={form.username}
                                 autoCapitalize="none"
                                 onChangeText={(text) => setForm({ ...form, username: text })}
+                            />
+
+                            <CustomInput
+                                icon={Mail}
+                                placeholder="Correo electrónico"
+                                value={form.email}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                onChangeText={(text) => setForm({ ...form, email: text })}
                             />
 
                             <CustomInput
@@ -138,124 +166,25 @@ const RegisterScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    keyboardView: {
-        flex: 1,
-    },
-    scrollContent: {
-        flexGrow: 1,
-        paddingHorizontal: 35,
-        justifyContent: 'center',
-        paddingTop: 60,
-        paddingBottom: 40,
-    },
-    circle: {
-        position: 'absolute',
-        borderRadius: 1000,
-        opacity: 0.15,
-    },
-    circle1: {
-        width: 300,
-        height: 300,
-        backgroundColor: COLORS.accent,
-        top: -80,
-        right: -100,
-    },
-    circle2: {
-        width: 250,
-        height: 250,
-        backgroundColor: COLORS.primary,
-        bottom: -100,
-        left: -80,
-    },
-    backButton: {
-        position: 'absolute',
-        top: 60,
-        left: 20,
-        zIndex: 10,
-        padding: 10,
-        backgroundColor: 'rgba(255,255,255,0.5)',
-        borderRadius: 20,
-    },
-    logoContainer: {
-        alignItems: 'center',
-        marginBottom: 20,
-        marginTop: 40,
-    },
-    iconCircle: {
-        width: 70,
-        height: 70,
-        borderRadius: 25,
-        backgroundColor: COLORS.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-        transform: [{ rotate: '10deg' }],
-        elevation: 10,
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-    },
-    sparkleTag: {
-        position: 'absolute',
-        top: -5,
-        left: -5,
-        backgroundColor: COLORS.accent,
-        padding: 6,
-        borderRadius: 12,
-    },
-    header: {
-        alignItems: 'center',
-        marginBottom: 40,
-    },
-    brandName: {
-        fontSize: 36,
-        fontWeight: '900',
-        color: COLORS.text,
-        letterSpacing: -1,
-    },
-    accentBar: {
-        width: 40,
-        height: 5,
-        backgroundColor: COLORS.accent,
-        borderRadius: 10,
-        marginTop: 4,
-    },
-    subtitle: {
-        fontSize: 15,
-        color: COLORS.text,
-        opacity: 0.6,
-        marginTop: 10,
-        fontWeight: '500',
-    },
-    form: {
-        width: '100%',
-    },
-    errorText: {
-        color: COLORS.error,
-        fontSize: 13,
-        textAlign: 'center',
-        marginBottom: 15,
-        marginTop: -5,
-    },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 40,
-    },
-    footerText: {
-        fontSize: 15,
-        color: COLORS.text,
-        opacity: 0.6,
-    },
-    loginText: {
-        fontSize: 15,
-        color: COLORS.accent,
-        fontWeight: '800',
-    },
+    container: { flex: 1, backgroundColor: COLORS.background },
+    keyboardView: { flex: 1 },
+    scrollContent: { flexGrow: 1, paddingHorizontal: 35, justifyContent: 'center', paddingTop: 60, paddingBottom: 40 },
+    circle: { position: 'absolute', borderRadius: 1000, opacity: 0.15 },
+    circle1: { width: 300, height: 300, backgroundColor: COLORS.accent, top: -80, right: -100 },
+    circle2: { width: 250, height: 250, backgroundColor: COLORS.primary, bottom: -100, left: -80 },
+    backButton: { position: 'absolute', top: 20, left: 20, zIndex: 10, padding: 10, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 20 },
+    logoContainer: { alignItems: 'center', marginBottom: 20, marginTop: 40 },
+    iconCircle: { width: 70, height: 70, borderRadius: 25, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', transform: [{ rotate: '10deg' }], elevation: 10, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 10 },
+    sparkleTag: { position: 'absolute', top: -5, left: -5, backgroundColor: COLORS.accent, padding: 6, borderRadius: 12 },
+    header: { alignItems: 'center', marginBottom: 40 },
+    brandName: { fontSize: 36, fontWeight: '900', color: COLORS.text, letterSpacing: -1 },
+    accentBar: { width: 40, height: 5, backgroundColor: COLORS.accent, borderRadius: 10, marginTop: 4 },
+    subtitle: { fontSize: 15, color: COLORS.text, opacity: 0.6, marginTop: 10, fontWeight: '500' },
+    form: { width: '100%' },
+    errorText: { color: '#ff4444', fontSize: 13, textAlign: 'center', marginBottom: 15, marginTop: -5, fontWeight: '600' },
+    footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 40 },
+    footerText: { fontSize: 15, color: COLORS.text, opacity: 0.6 },
+    loginText: { fontSize: 15, color: COLORS.accent, fontWeight: '800' },
 });
 
 export default RegisterScreen;
