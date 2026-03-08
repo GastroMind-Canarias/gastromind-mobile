@@ -13,7 +13,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { KitchenTool, UserProfile } from '../../../core/domain/profile.types';
+import { Allergen, KitchenTool, UserProfile } from '../../../core/domain/profile.types';
 import { COLORS } from '../../../shared/theme/colors';
 import { profileService } from '../../external/api/ProfileService';
 import { AuthContext } from '../navigation/AuthContext';
@@ -32,6 +32,17 @@ const TOOL_CONFIG: Record<KitchenTool, { emoji: string; label: string }> = {
     [KitchenTool.ROBOT_COCINA]: { emoji: '🤖', label: 'Robot de cocina' },
     [KitchenTool.BATIDORA]: { emoji: '🌀', label: 'Batidora' },
     [KitchenTool.SARTEN]: { emoji: '🍳', label: 'Sartén' },
+};
+
+// ─── Config de alérgenos ──────────────────────────────────────────────────────
+const ALLERGEN_CONFIG: Record<Allergen, { emoji: string; label: string }> = {
+    [Allergen.GLUTEN]: { emoji: '🌾', label: 'Gluten' },
+    [Allergen.LACTOSA]: { emoji: '🥛', label: 'Lactosa' },
+    [Allergen.FRUTOS_SECOS]: { emoji: '🥜', label: 'Frutos Secos' },
+    [Allergen.HUEVO]: { emoji: '🥚', label: 'Huevo' },
+    [Allergen.MARISCO]: { emoji: '🦐', label: 'Marisco' },
+    [Allergen.PESCADO]: { emoji: '🐟', label: 'Pescado' },
+    [Allergen.SOJA]: { emoji: '🫘', label: 'Soja' },
 };
 
 // ─── Mini avatar ─────────────────────────────────────────────────────────────
@@ -87,17 +98,108 @@ function ToolPill({
     );
 }
 
+// ─── Pill animada para alérgeno ──────────────────────────────────────────────
+function AllergenPill({
+    allergen, active, onPress,
+}: { allergen: Allergen; active: boolean; onPress: () => void }) {
+    const cfg = ALLERGEN_CONFIG[allergen];
+    const scale = useRef(new Animated.Value(1)).current;
+
+    const handlePress = () => {
+        Animated.sequence([
+            Animated.spring(scale, { toValue: 0.90, useNativeDriver: true, speed: 80, bounciness: 0 }),
+            Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 8 }),
+        ]).start();
+        onPress();
+    };
+
+    return (
+        <Animated.View style={{ transform: [{ scale }] }}>
+            <TouchableOpacity
+                onPress={handlePress}
+                style={[
+                    styles.toolPill,
+                    active
+                        ? { backgroundColor: COLORS.error, borderColor: COLORS.error }
+                        : { backgroundColor: COLORS.white, borderColor: COLORS.text + '18' },
+                ]}
+                activeOpacity={0.85}
+            >
+                <Text style={styles.toolEmoji}>{cfg.emoji}</Text>
+                <Text style={[styles.toolLabel, { color: active ? COLORS.white : COLORS.text }]}>
+                    {cfg.label}
+                </Text>
+                {active && <Text style={styles.toolCheck}>✕</Text>}
+            </TouchableOpacity>
+        </Animated.View>
+    );
+}
+
+// ─── Pill animada para alérgeno personalizado ────────────────────────────────
+function CustomAllergenPill({
+    allergen, onPress,
+}: { allergen: string; onPress: () => void }) {
+    const scale = useRef(new Animated.Value(1)).current;
+
+    const handlePress = () => {
+        Animated.sequence([
+            Animated.spring(scale, { toValue: 0.90, useNativeDriver: true, speed: 80, bounciness: 0 }),
+            Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 8 }),
+        ]).start();
+        onPress();
+    };
+
+    return (
+        <Animated.View style={{ transform: [{ scale }] }}>
+            <TouchableOpacity
+                onPress={handlePress}
+                style={[
+                    styles.toolPill,
+                    { backgroundColor: COLORS.error, borderColor: COLORS.error }
+                ]}
+                activeOpacity={0.85}
+            >
+                <Text style={styles.toolEmoji}>⚠️</Text>
+                <Text style={[styles.toolLabel, { color: COLORS.white }]}>
+                    {allergen}
+                </Text>
+                <Text style={styles.toolCheck}>✕</Text>
+            </TouchableOpacity>
+        </Animated.View>
+    );
+}
+
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
     const { logout } = useContext(AuthContext);
     const [profile, setProfile] = useState<UserProfile>(profileService.get);
     const [showAddMember, setShowAdd] = useState(false);
     const [newMemberName, setNewName] = useState('');
+    const [showAddAllergen, setShowAddAllergen] = useState(false);
+    const [newAllergenName, setNewAllergenName] = useState('');
 
     const refresh = useCallback(() => setProfile(profileService.get()), []);
 
     const handleToggleTool = (tool: KitchenTool) => {
         profileService.toggleTool(tool);
+        refresh();
+    };
+
+    const handleToggleAllergen = (allergen: Allergen) => {
+        profileService.toggleAllergen(allergen);
+        refresh();
+    };
+
+    const handleToggleCustomAllergen = (allergen: string) => {
+        profileService.toggleCustomAllergen(allergen);
+        refresh();
+    };
+
+    const handleAddCustomAllergen = () => {
+        if (!newAllergenName.trim()) return;
+        profileService.addCustomAllergen(newAllergenName.trim());
+        setNewAllergenName('');
+        setShowAddAllergen(false);
         refresh();
     };
 
@@ -123,8 +225,11 @@ export default function ProfileScreen() {
     const toolList = Object.values(KitchenTool);
     const activeCount = profile.kitchenTools.length;
 
+    const allergenList = Object.values(Allergen);
+    const activeAllergenCount = profile.allergens.length + profile.customAllergens.length;
+
     return (
-        <SafeAreaView style={styles.root} edges={['top']}>
+        <View style={styles.root}>
 
             {/* ══ HEADER CARD ══ */}
             <View style={styles.profileHeader}>
@@ -187,6 +292,47 @@ export default function ProfileScreen() {
                                 onPress={() => handleToggleTool(tool)}
                             />
                         ))}
+                    </View>
+                </View>
+
+                {/* ══ ALERGIAS E INTOLERANCIAS ══ */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>⚠️ Alergias e intolerancias</Text>
+                        <View style={[styles.sectionBadge, { backgroundColor: COLORS.error + '20', borderColor: COLORS.error + '55' }]}>
+                            <Text style={[styles.sectionBadgeText, { color: COLORS.error }]}>{activeAllergenCount}</Text>
+                        </View>
+                    </View>
+                    <Text style={styles.sectionSub}>
+                        Marca los ingredientes que debes evitar.
+                    </Text>
+
+                    <View style={styles.toolGrid}>
+                        {allergenList.map(allergen => (
+                            <AllergenPill
+                                key={allergen}
+                                allergen={allergen}
+                                active={profile.allergens.includes(allergen)}
+                                onPress={() => handleToggleAllergen(allergen)}
+                            />
+                        ))}
+                        {profile.customAllergens.map(allergen => (
+                            <CustomAllergenPill
+                                key={allergen}
+                                allergen={allergen}
+                                onPress={() => handleToggleCustomAllergen(allergen)}
+                            />
+                        ))}
+
+                        <TouchableOpacity
+                            style={[styles.toolPill, { backgroundColor: COLORS.white, borderColor: COLORS.text + '25', borderStyle: 'dashed', borderWidth: 1 }]}
+                            onPress={() => setShowAddAllergen(true)}
+                        >
+                            <Text style={styles.toolEmoji}>➕</Text>
+                            <Text style={[styles.toolLabel, { color: COLORS.text }]}>
+                                Otro...
+                            </Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
@@ -274,7 +420,42 @@ export default function ProfileScreen() {
                     </Pressable>
                 </Pressable>
             </Modal>
-        </SafeAreaView>
+
+            {/* ══ MODAL AÑADIR ALÉRGENO ══ */}
+            <Modal visible={showAddAllergen} transparent animationType="slide">
+                <Pressable style={styles.modalOverlay} onPress={() => setShowAddAllergen(false)}>
+                    <Pressable style={styles.sheetWrap}>
+                        <View style={styles.sheetHandle} />
+                        <Text style={styles.sheetTitle}>⚠️ Añadir alérgeno</Text>
+
+                        <Text style={styles.fieldLabel}>Nombre del ingrediente</Text>
+                        <TextInput
+                            style={styles.fieldInput}
+                            value={newAllergenName}
+                            onChangeText={setNewAllergenName}
+                            placeholder="Ej. Cacahuete"
+                            placeholderTextColor={COLORS.text + '44'}
+                            autoFocus
+                            onSubmitEditing={handleAddCustomAllergen}
+                            returnKeyType="done"
+                        />
+
+                        <View style={styles.sheetFooter}>
+                            <TouchableOpacity onPress={() => setShowAddAllergen(false)} style={styles.sheetBtnCancel}>
+                                <Text style={styles.sheetBtnCancelText}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={handleAddCustomAllergen}
+                                style={[styles.sheetBtnSave, { backgroundColor: COLORS.error }, !newAllergenName.trim() && { opacity: 0.4 }]}
+                                disabled={!newAllergenName.trim()}
+                            >
+                                <Text style={styles.sheetBtnSaveText}>Añadir</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
+        </View>
     );
 }
 
@@ -299,7 +480,7 @@ const styles = StyleSheet.create({
     profileHeader: {
         backgroundColor: DARK_GREEN,
         paddingHorizontal: 22,
-        paddingTop: 8,
+        paddingTop: Platform.OS === 'ios' ? 58 : 44,
         paddingBottom: 22,
         borderBottomLeftRadius: 32,
         borderBottomRightRadius: 32,

@@ -107,7 +107,7 @@ const HomeScreen: React.FC = () => {
   const firstName = profile.name.split(' ')[0];
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
+    <View style={styles.root}>
 
       {/* ══ HEADER PANEL ══ */}
       <View style={styles.header}>
@@ -253,7 +253,7 @@ const HomeScreen: React.FC = () => {
           <View style={{ height: 100 }} />
         </ScrollView>
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: DARK_GREEN,
     paddingHorizontal: 22,
-    paddingTop: 8,
+    paddingTop: Platform.OS === 'ios' ? 58 : 44,
     paddingBottom: 22,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,

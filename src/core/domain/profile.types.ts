@@ -1,3 +1,13 @@
+export enum Allergen {
+    GLUTEN = 'GLUTEN',
+    LACTOSA = 'LACTOSA',
+    FRUTOS_SECOS = 'FRUTOS_SECOS',
+    HUEVO = 'HUEVO',
+    MARISCO = 'MARISCO',
+    PESCADO = 'PESCADO',
+    SOJA = 'SOJA',
+}
+
 export enum KitchenTool {
     HORNO = 'HORNO',
     MICROONDAS = 'MICROONDAS',
@@ -19,4 +29,6 @@ export interface UserProfile {
     email: string;
     kitchenTools: KitchenTool[];
     householdMembers: HouseholdMember[];
+    allergens: Allergen[];
+    customAllergens: string[];
 }
