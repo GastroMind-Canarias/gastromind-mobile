@@ -229,7 +229,10 @@ export default function FridgeApp() {
     }).start();
   }, []);
 
-  const refresh = () => setItems(fridgeService.getAll());
+  const refresh = async () => {
+    const data = await fridgeService.getAll();
+    setItems(data);
+  };
 
   const openAdd = () => {
     setEditingId(null); setProductName(''); setQuantity('');
@@ -244,16 +247,22 @@ export default function FridgeApp() {
     setShowForm(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!productName.trim()) return;
+    const parsedQty = parseFloat(quantity);
+    const validQty = (isNaN(parsedQty) || parsedQty <= 0) ? 1 : parsedQty;
     const data = {
       product: productName.trim(),
-      quantity: parseFloat(quantity) || 0,
+      quantity: validQty,
       expirationDate: expDate,
       status,
       fridgeId: 'MAIN',
     };
-    editingId ? fridgeService.update(editingId, data) : fridgeService.create(data);
+    if (editingId) {
+      await fridgeService.update(editingId, data);
+    } else {
+      await fridgeService.create(data);
+    }
     setShowForm(false);
     refresh();
   };
@@ -264,7 +273,7 @@ export default function FridgeApp() {
       `¿Eliminar "${item.product}"?`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar', style: 'destructive', onPress: () => { fridgeService.delete(item.id); refresh(); } },
+        { text: 'Eliminar', style: 'destructive', onPress: async () => { await fridgeService.delete(item.id); refresh(); } },
       ]
     );
   };
