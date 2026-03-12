@@ -1,42 +1,43 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ChefHat, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-react-native';
-import React, { useContext, useState } from 'react';
+import { ChefHat, Lock, Mail, Sparkles } from 'lucide-react-native';
+import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
-import { COLORS } from '../../../shared/theme/colors';
-import { AuthStackParamList } from '../navigation/types';
-import { CustomInput } from '../components/CustomInput';
-import { CustomButton } from '../components/CustomButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AuthContext } from '../navigation/AuthContext';
+import { COLORS } from '../../../shared/theme/colors';
+import { CustomButton } from '../components/CustomButton';
+import { CustomInput } from '../components/CustomInput';
+import { useAuth } from '../hooks/useAuth';
+import { AuthStackParamList } from '../navigation/types';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
 const { width, height } = Dimensions.get('window');
 
 const LoginScreen: React.FC = () => {
-  const { login } = useContext(AuthContext);
-  const [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
+  const { signIn, loading, error } = useAuth();
   const navigation = useNavigation<LoginScreenNavigationProp>();
 
-  const handleLogin = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      login();
-    }, 1500);
+  const handleLogin = async () => {
+    if (!username || !password) return;
+
+    try {
+      await signIn({ username, password });
+    } catch (e) {
+      console.log("Error de login real:", e);
+    }
   };
 
   return (
@@ -68,10 +69,12 @@ const LoginScreen: React.FC = () => {
           </View>
 
           <View style={styles.form}>
+            {error && <Text style={styles.errorText}>{error}</Text>}
             <CustomInput
               icon={Mail}
-              placeholder="Tu correo"
-              keyboardType="email-address"
+              placeholder="Tu usuario"
+              value={username}
+              onChangeText={setUsername}
               autoCapitalize="none"
             />
 
@@ -79,6 +82,8 @@ const LoginScreen: React.FC = () => {
               icon={Lock}
               placeholder="Tu contraseña"
               isPassword={true}
+              value={password}
+              onChangeText={setPassword}
               autoCapitalize="none"
             />
 
@@ -174,6 +179,7 @@ const styles = StyleSheet.create({
   form: {
     width: '100%',
   },
+  errorText: { color: '#ff4444', fontSize: 13, textAlign: 'center', marginBottom: 15, marginTop: -5, fontWeight: '600' },
   forgotPass: {
     alignSelf: 'flex-end',
     marginBottom: 30, paddingRight: 5,
