@@ -1,5 +1,6 @@
 // types.ts
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Recipe } from '../../../core/domain/recipe.types';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -7,3 +8,10 @@ export type AuthStackParamList = {
 };
 
 export type AuthNavigationProp = NativeStackNavigationProp<AuthStackParamList>;
+
+export type AppStackParamList = {
+  Tabs: undefined;
+  RecipeDetail: { recipe: Recipe };
+};
+
+export type AppNavigationProp = NativeStackNavigationProp<AppStackParamList>;

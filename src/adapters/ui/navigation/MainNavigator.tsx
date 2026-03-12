@@ -1,11 +1,12 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, Refrigerator, UserCircle2 } from 'lucide-react-native';
+import { Home, Refrigerator, UserCircle2, Heart } from 'lucide-react-native';
 import React from 'react';
 import { Platform, View } from 'react-native';
 import { COLORS } from '../../../shared/theme/colors';
 import FridgeScreen from '../screens/FridgeScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import FavoriteRecipesScreen from '../screens/FavoriteRecipesScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -61,6 +62,17 @@ export const MainNavigator = () => {
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon focused={focused}>
               <Refrigerator size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
+            </TabIcon>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Favoritos"
+        component={FavoriteRecipesScreen}
+        options={{
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon focused={focused}>
+              <Heart size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
             </TabIcon>
           ),
         }}

@@ -5,7 +5,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { setupInterceptors } from '../../external/api/authInterceptor';
 import { AuthContext } from './AuthContext';
 import { AuthNavigator } from './AuthNavigator';
-import { MainNavigator } from './MainNavigator';
+import { AppNavigator } from './AppNavigator';
 
 export const RootNavigator = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -46,7 +46,7 @@ export const RootNavigator = () => {
 
   return (
     <AuthContext.Provider value={authContext}>
-      {isLoggedIn ? <MainNavigator /> : <AuthNavigator />}
+      {isLoggedIn ? <AppNavigator /> : <AuthNavigator />}
     </AuthContext.Provider>
   );
 };
