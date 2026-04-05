@@ -1,18 +1,19 @@
 {
     "cli": {
-      "version": ">= 5.9.1"
+        "version": ">= 5.9.1"
     },
     "build": {
-      "development": {
-        "developmentClient": true,
-        "distribution": "internal"
-      },
-      "preview": {
-        "distribution": "internal"
-      },
-      "production": {}
-    },
-    "update": {
-      "branch": "development"
+        "development": {
+            "developmentClient": true,
+            "distribution": "internal",
+            "channel": "development"
+        },
+        "preview": {
+            "distribution": "internal",
+            "channel": "development"
+        },
+        "production": {
+            "channel": "production"
+        }
     }
-  }
+}
