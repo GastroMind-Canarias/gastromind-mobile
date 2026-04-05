@@ -48,6 +48,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "024e06fa-9b33-459a-9c12-5ba555ad4a36"
+      }
+    },
+    "owner": "gastromind-team"
   }
 }
