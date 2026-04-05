@@ -29,4 +29,6 @@ jobs:
         run: npm install
 
       - name: 🚀 Publish Update
-        run: eas update --branch development --message "${{ github.event.head_commit.message }}"
+        run: npx eas update --branch development --message "${{ github.event.head_commit.message }}" --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
