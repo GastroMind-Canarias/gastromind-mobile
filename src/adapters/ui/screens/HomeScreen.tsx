@@ -1,5 +1,6 @@
-import { useNavigation } from "@react-navigation/native";
 import * as React from "react";
+import { router } from "expo-router";
+import { ROUTES } from "../navigation/routes";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -156,7 +157,6 @@ function QuickCard({
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const HomeScreen: React.FC = () => {
   const { signOut } = useAuth();
-  const navigation = useNavigation<any>();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -287,7 +287,7 @@ const HomeScreen: React.FC = () => {
           {expiredCount > 0 && (
             <TouchableOpacity
               style={styles.alertBanner}
-              onPress={() => navigation.navigate("Nevera")}
+              onPress={() => router.push(ROUTES.appTabFridge)}
               activeOpacity={0.85}
             >
               <View style={styles.alertBannerIconWrap}>
@@ -318,14 +318,14 @@ const HomeScreen: React.FC = () => {
               title="Mi Nevera"
               subtitle={`${freshCount} frescos`}
               accentColor={COLORS.primary}
-              onPress={() => navigation.navigate("Nevera")}
+              onPress={() => router.push(ROUTES.appTabFridge)}
             />
             <QuickCard
               icon={User}
               title="Mi Perfil"
               subtitle={`${toolCount} utensilios`}
               accentColor="#5BBCFF"
-              onPress={() => navigation.navigate("Perfil")}
+              onPress={() => router.push(ROUTES.appTabProfile)}
             />
           </View>
 
@@ -395,7 +395,7 @@ const HomeScreen: React.FC = () => {
             </View>
             <TouchableOpacity
               style={styles.householdArrow}
-              onPress={() => navigation.navigate("Perfil")}
+              onPress={() => router.push(ROUTES.appTabProfile)}
             >
               <ChevronRight size={18} color={COLORS.primary} strokeWidth={2.8} />
             </TouchableOpacity>

@@ -1,5 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
-import { AppNavigationProp } from '../navigation/types';
+import { pushRecipeDetail } from '../navigation/routes';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -129,7 +128,6 @@ const RecipeCard: React.FC<{ recipe: Recipe; onPress: () => void }> = ({ recipe,
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const FavoriteRecipesScreen: React.FC = () => {
-  const navigation = useNavigation<AppNavigationProp>();
   const [recipes] = useState<Recipe[]>(MOCK_RECIPES);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -177,9 +175,7 @@ const FavoriteRecipesScreen: React.FC = () => {
               <RecipeCard
                 key={recipe.id}
                 recipe={recipe}
-                onPress={() => {
-                  navigation.navigate('RecipeDetail', { recipe });
-                }}
+                onPress={() => pushRecipeDetail(recipe)}
               />
             ))}
           </View>

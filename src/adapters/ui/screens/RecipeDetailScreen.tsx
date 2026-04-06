@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import {
   Animated,
   Easing,
@@ -11,22 +11,27 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ChefHat, Clock3, Flame, Heart, UtensilsCrossed } from 'lucide-react-native';
-import { AppStackParamList } from '../navigation/types';
+import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
 
 // ─── Constantes de tema ─────────────────────
 const DARK_GREEN = '#0D1F17';
-const MID_GREEN = '#1A3826';
-const ICE = '#C8F0DC';
-
-type RecipeDetailRouteProp = RouteProp<AppStackParamList, 'RecipeDetail'>;
 
 const RecipeDetailScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const route = useRoute<RecipeDetailRouteProp>();
-  const { recipe } = route.params;
+  const router = useRouter();
+  const { recipe: recipeParam } = useLocalSearchParams<{ recipe: string }>();
+
+  const recipe = useMemo((): Recipe | null => {
+    const raw = Array.isArray(recipeParam) ? recipeParam[0] : recipeParam;
+    if (!raw || typeof raw !== 'string') return null;
+    try {
+      return JSON.parse(raw) as Recipe;
+    } catch {
+      return null;
+    }
+  }, [recipeParam]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -38,6 +43,16 @@ const RecipeDetailScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
+  useEffect(() => {
+    if (recipeParam != null && recipe === null) {
+      router.back();
+    }
+  }, [recipe, recipeParam, router]);
+
+  if (!recipe) {
+    return null;
+  }
+
   return (
     <View style={styles.root}>
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
@@ -47,7 +62,7 @@ const RecipeDetailScreen: React.FC = () => {
           
           {/* OVERLAY & BACK BUTTON */}
           <SafeAreaView edges={['top']} style={styles.backButtonContainer}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
               <ArrowLeft size={20} color={DARK_GREEN} strokeWidth={2.8} />
             </TouchableOpacity>
             
