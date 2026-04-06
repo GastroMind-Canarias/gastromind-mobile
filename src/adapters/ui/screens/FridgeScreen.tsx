@@ -555,7 +555,7 @@ export default function FridgeApp() {
       <View style={styles.ambientOrbB} />
 
       {/* ══ FRIDGE PANEL HEADER ══ */}
-      <View style={styles.fridgeHeader}>
+      <View style={[styles.fridgeHeader, { paddingTop: insets.top + 12 }]}>
         {/* Top bar */}
         <View style={styles.fridgeTopBar}>
           <View style={styles.fridgeTopBarLeft}>
@@ -754,7 +754,6 @@ const styles = StyleSheet.create({
   // ── Fridge Header (top panel)
   fridgeHeader: {
     backgroundColor: FRIDGE_DARK,
-    paddingTop: Platform.OS === 'ios' ? 58 : 44,
     paddingHorizontal: 22,
     paddingBottom: 22,
     borderBottomLeftRadius: 34,

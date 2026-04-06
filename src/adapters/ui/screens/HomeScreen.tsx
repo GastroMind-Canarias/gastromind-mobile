@@ -32,6 +32,7 @@ import { fridgeService } from "../../external/api/FridgeService";
 import { profileService } from "../../external/api/ProfileService";
 import { UserProfile } from "../../../core/domain/profile.types";
 import { useAuth } from "../hooks/useAuth";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = "#0D1F17";
@@ -155,7 +156,10 @@ function QuickCard({
 }
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
+const HEADER_TOP_GAP = 12;
+
 const HomeScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>([]);
@@ -219,7 +223,7 @@ const HomeScreen: React.FC = () => {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} />
       {/* ══ HEADER PANEL ══ */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + HEADER_TOP_GAP }]}>
         {/* Top bar */}
         <View style={styles.headerTopBar}>
           <View style={styles.ledRow}>
@@ -280,7 +284,10 @@ const HomeScreen: React.FC = () => {
         ]}
       >
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingBottom: insets.bottom + 100 },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {/* Alerta caducados */}
@@ -401,7 +408,6 @@ const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <View style={{ height: 100 }} />
         </ScrollView>
       </Animated.View>
     </View>
@@ -444,7 +450,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: DARK_GREEN,
     paddingHorizontal: 22,
-    paddingTop: Platform.OS === "ios" ? 58 : 44,
     paddingBottom: 22,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,

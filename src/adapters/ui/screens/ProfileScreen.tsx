@@ -43,6 +43,7 @@ import { apiClient } from "../../external/api/apiClient";
 import { AppBottomSheet } from "../components/AppBottomSheet";
 import { AppDialog, type AppDialogAction } from "../components/AppDialog";
 import { useAuth } from "../hooks/useAuth";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ─── Constantes de diseño ─────────────────────────────────────────────────────
 const DARK_GREEN = "#0D1F17";
@@ -312,6 +313,7 @@ function AllergenPillBackend({
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
 
   const [profile, setProfile] = useState<UserProfile>({
@@ -647,7 +649,13 @@ export default function ProfileScreen() {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} />
       <ScrollView
-        contentContainerStyle={styles.pageScroll}
+        contentContainerStyle={[
+          styles.pageScroll,
+          {
+            paddingTop: insets.top + 12,
+            paddingBottom: insets.bottom + 100,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topBand}>
@@ -1057,8 +1065,6 @@ const styles = StyleSheet.create({
 
   pageScroll: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 110,
     gap: 14,
   },
 
@@ -1225,7 +1231,6 @@ const styles = StyleSheet.create({
   profileHeader: {
     backgroundColor: DARK_GREEN,
     paddingHorizontal: 22,
-    paddingTop: Platform.OS === "ios" ? 58 : 44,
     paddingBottom: 16,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,

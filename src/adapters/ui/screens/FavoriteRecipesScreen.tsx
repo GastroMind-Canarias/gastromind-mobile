@@ -14,6 +14,7 @@ import {
 import { ChefHat, Clock3, Flame, Heart } from 'lucide-react-native';
 import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = '#0D1F17';
@@ -128,6 +129,7 @@ const RecipeCard: React.FC<{ recipe: Recipe; onPress: () => void }> = ({ recipe,
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const FavoriteRecipesScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const [recipes] = useState<Recipe[]>(MOCK_RECIPES);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -143,7 +145,7 @@ const FavoriteRecipesScreen: React.FC = () => {
   return (
     <View style={styles.root}>
       {/* ══ HEADER PANEL ══ */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerTopBar}>
           <View style={styles.ledRow}>
             <View style={styles.led} />
@@ -160,7 +162,7 @@ const FavoriteRecipesScreen: React.FC = () => {
       </View>
 
       {/* ══ BODY ══ */}
-      <Animated.View style={[{ flex: 1, paddingBottom: 110 }, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <Animated.View style={[{ flex: 1, paddingBottom: insets.bottom + 100 }, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
@@ -203,7 +205,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: DARK_GREEN,
     paddingHorizontal: 22,
-    paddingTop: Platform.OS === 'ios' ? 58 : 44,
     paddingBottom: 22,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,

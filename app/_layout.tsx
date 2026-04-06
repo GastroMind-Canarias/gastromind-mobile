@@ -9,6 +9,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -91,7 +92,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   return (
-    <>
+    <SafeAreaProvider>
       <StatusBar style="light" />
       <AuthGate>
         <Stack screenOptions={{ headerShown: false }}>
@@ -100,7 +101,7 @@ export default function RootLayout() {
           <Stack.Screen name="(app)" />
         </Stack>
       </AuthGate>
-    </>
+    </SafeAreaProvider>
   );
 }
 
