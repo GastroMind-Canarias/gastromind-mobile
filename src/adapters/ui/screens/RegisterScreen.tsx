@@ -1,5 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, ArrowRight, Check, ChefHat, House, Lock, Mail, ShieldAlert, Sparkles, User, UtensilsCrossed } from 'lucide-react-native';
+import { Airplay, ArrowLeft, ArrowRight, Check, ChefHat, CookingPot, Cpu, Flame, House, Link2, Lock, Mail, Microwave, RotateCw, ShieldAlert, Sparkles, User, Users, UtensilsCrossed, Wheat, Wind, Zap, type LucideIcon } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -28,6 +28,9 @@ import { AuthNavigationProp } from '../navigation/types';
 const { width } = Dimensions.get('window');
 const TOTAL_STEPS = 4;
 
+type HouseholdMode = 'CREATE_NEW' | 'JOIN_EXISTING';
+
+
 // ─── Palette extras ────────────────────────────────────────────────────────────
 const DARK_GREEN = '#0D1F17';
 const MID_GREEN  = '#1A3826';
@@ -39,31 +42,44 @@ const FIELD_BG   = '#EEF8F2';
 interface AllergenOption {
   id: string;
   name: string;
-  emoji: string;
+  icon: LucideIcon;
 }
 
-const ALLERGEN_EMOJIS: Record<string, string> = {
-  GLUTEN: '🌾', LACTOSA: '🥛', FRUTOS_SECOS: '🥜', HUEVO: '🥚',
-  MARISCO: '🦐', PESCADO: '🐟', SOJA: '🫘', CACAHUETE: '🥜',
-  APIO: '🥬', MOSTAZA: '🟡', SESAMO: '🫘', ALTRAMUZ: '🌿',
-  MOLUSCOS: '🐚', SULFITOS: '🍷',
+const ALLERGEN_ICONS: Record<string, LucideIcon> = {
+  GLUTEN: Wheat,
+  LACTOSA: ShieldAlert,
+  FRUTOS_SECOS: ShieldAlert,
+  HUEVO: ShieldAlert,
+  MARISCO: ShieldAlert,
+  PESCADO: ShieldAlert,
+  SOJA: ShieldAlert,
+  CACAHUETE: ShieldAlert,
+  APIO: ShieldAlert,
+  MOSTAZA: ShieldAlert,
+  SESAMO: ShieldAlert,
+  ALTRAMUZ: ShieldAlert,
+  MOLUSCOS: ShieldAlert,
+  SULFITOS: ShieldAlert,
 };
 
-// ─── Appliance items ───────────────────────────────────────────────────────────
-interface ApplianceOption {
-  key: string;
-  label: string;
-  emoji: string;
-}
+const APPLIANCE_ICONS: Record<string, LucideIcon> = {
+  HORNO: Flame,
+  MICROONDAS: Microwave,
+  AIR_FRYER: Wind,
+  VITROCERAMICA: Zap,
+  ROBOT_COCINA: Cpu,
+  BATIDORA: RotateCw,
+  SARTEN: CookingPot,
+};
 
-const APPLIANCES: ApplianceOption[] = [
-  { key: 'HORNO',        label: 'Horno',           emoji: '🔥' },
-  { key: 'MICROONDAS',   label: 'Microondas',      emoji: '📡' },
-  { key: 'AIR_FRYER',    label: 'Air Fryer',       emoji: '🌀' },
-  { key: 'VITROCERAMICA',label: 'Vitrocerámica',   emoji: '🍳' },
-  { key: 'ROBOT_COCINA', label: 'Robot de cocina',  emoji: '🤖' },
-  { key: 'BATIDORA',     label: 'Batidora',        emoji: '🥤' },
-  { key: 'SARTEN',       label: 'Sartén',          emoji: '🍳' },
+const APPLIANCE_OPTIONS = [
+  { id: 'HORNO', name: 'Horno' },
+  { id: 'MICROONDAS', name: 'Microondas' },
+  { id: 'AIR_FRYER', name: 'Air Fryer' },
+  { id: 'VITROCERAMICA', name: 'Vitrocerámica' },
+  { id: 'ROBOT_COCINA', name: 'Robot de Cocina' },
+  { id: 'BATIDORA', name: 'Batidora' },
+  { id: 'SARTEN', name: 'Sartén' },
 ];
 
 // ─── Step indicator ────────────────────────────────────────────────────────────
@@ -105,9 +121,15 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 // ─── Toggle chip ───────────────────────────────────────────────────────────────
 function ToggleChip({
-  emoji, label, selected, onToggle, accessibilityHint,
+  icon: Icon,
+  label,
+  selected,
+  onToggle,
+  accessibilityHint,
 }: {
-  emoji: string; label: string; selected: boolean;
+  icon: LucideIcon;
+  label: string;
+  selected: boolean;
   onToggle: () => void; accessibilityHint?: string;
 }) {
   return (
@@ -124,7 +146,14 @@ function ToggleChip({
         selected && styles.chipSelected,
       ]}
     >
-      <Text style={styles.chipEmoji}>{emoji}</Text>
+      {selected && <View style={styles.chipSelectedAccent} />}
+      <View style={[styles.chipIconWrap, selected && styles.chipIconWrapSelected]}>
+        <Icon
+          size={14}
+          color={selected ? COLORS.white : COLORS.primary}
+          strokeWidth={2.4}
+        />
+      </View>
       <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>{label}</Text>
       {selected && (
         <View style={styles.chipCheck}>
@@ -140,7 +169,7 @@ function ToggleChip({
 // ═══════════════════════════════════════════════════════════════════════════════
 const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<AuthNavigationProp>();
-  const { signUp, loading: authLoading, error: apiError } = useAuth();
+  const { signUp, signIn, loading: authLoading, error: apiError } = useAuth();
 
   // ── Step 0 – account
   const [form, setForm] = useState({
@@ -148,17 +177,9 @@ const RegisterScreen: React.FC = () => {
   });
 
   // ── Step 1 – household
+  const [householdMode, setHouseholdMode] = useState<HouseholdMode>('CREATE_NEW');
   const [householdName, setHouseholdName] = useState('');
-  const [memberCount, setMemberCount] = useState(1);
-
-  // ── Step 2 – allergens (fetched from backend)
-  const [allergenOptions, setAllergenOptions] = useState<AllergenOption[]>([]);
-  const [selectedAllergens, setSelectedAllergens] = useState<string[]>([]);
-  const [allergensLoading, setAllergensLoading] = useState(false);
-
-  // ── Step 3 – appliances
-  const [selectedAppliances, setSelectedAppliances] = useState<string[]>([]);
-
+  const [inviteToken, setInviteToken] = useState('');
   // ── General
   const [step, setStep] = useState(0);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -166,6 +187,12 @@ const RegisterScreen: React.FC = () => {
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim  = useRef(new Animated.Value(1)).current;
+
+  // ── Step 2 - allergens
+  const [allergenOptions, setAllergenOptions] = useState<AllergenOption[]>([]);
+  const [selectedAllergens, setSelectedAllergens] = useState<string[]>([]);
+  const [selectedAppliances, setSelectedAppliances] = useState<string[]>([]);
+  const [allergensLoading, setAllergensLoading] = useState(false);
 
   // ── Fetch allergens from backend when step 2 is reached
   useEffect(() => {
@@ -181,7 +208,7 @@ const RegisterScreen: React.FC = () => {
       const mapped: AllergenOption[] = res.data.map((a: any) => ({
         id: a.id,
         name: a.name,
-        emoji: ALLERGEN_EMOJIS[a.name?.toUpperCase()] || '⚠️',
+        icon: ALLERGEN_ICONS[a.name?.toUpperCase()] || ShieldAlert,
       }));
       setAllergenOptions(mapped);
     } catch (e) {
@@ -225,12 +252,12 @@ const RegisterScreen: React.FC = () => {
         }
         return true;
       case 1:
-        if (!householdName.trim()) {
-          setLocalError('Introduce el nombre de tu hogar');
+        if (householdMode === 'CREATE_NEW' && !householdName.trim()) {
+          setLocalError('Introduce el nombre del nuevo hogar');
           return false;
         }
-        if (memberCount < 1) {
-          setLocalError('Debe haber al menos 1 miembro');
+        if (householdMode === 'JOIN_EXISTING' && !inviteToken.trim()) {
+          setLocalError('Introduce el token de invitacion');
           return false;
         }
         return true;
@@ -247,25 +274,6 @@ const RegisterScreen: React.FC = () => {
   const handleNext = async () => {
     if (!validateStep()) return;
 
-    if (step === 0) {
-      // Register account on backend
-      setSaving(true);
-      try {
-        await signUp({
-          username: form.username,
-          email: form.email,
-          password: form.password,
-          role: 'ROLE_OWNER',
-        });
-        animateTransition(1, () => setStep(1));
-      } catch (e: any) {
-        setLocalError(apiError || 'Error al crear la cuenta');
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
-
     if (step < TOTAL_STEPS - 1) {
       animateTransition(1, () => setStep(s => s + 1));
     }
@@ -281,56 +289,31 @@ const RegisterScreen: React.FC = () => {
     }
   };
 
-  // ── Finish – Create household, allergens, appliances ──
+  // ── Finish – Create account and household at once ──
   const handleFinish = async () => {
     setSaving(true);
     setLocalError(null);
     try {
-      // 1) Find userId by username from users list
-      const usersRes = await apiClient.get('/users');
-      const me = usersRes.data.find((u: any) =>
-        u.name?.toLowerCase() === form.username.toLowerCase()
-      );
-      if (!me) {
-        setLocalError('No se encontró tu usuario. Intenta de nuevo.');
-        setSaving(false);
-        return;
-      }
-      const userId = me.id;
+      const cleanUsername = form.username.trim();
+      const cleanEmail = form.email.trim();
+      
+      await signUp({
+        username: cleanUsername,
+        email: cleanEmail,
+        password: form.password,
+        householdMode,
+        householdName: householdMode === 'CREATE_NEW' ? householdName.trim() : undefined,
+        inviteToken: householdMode === 'JOIN_EXISTING' ? inviteToken.trim() : undefined,
+        allergenIds: selectedAllergens,
+        applianceTypes: selectedAppliances,
+      });
 
-      // 2) Create household with owner
-      const hhRes = await apiClient.post(
-        `/households/create-with-owner?userId=${userId}`,
-        { name: householdName.trim() }
-      );
-      const householdId = hhRes.data.id;
+      // Entrar directamente después de registrar
+      await signIn({ username: cleanUsername, password: form.password });
 
-      // 3) Add allergens to user
-      for (const allergenId of selectedAllergens) {
-        try {
-          await apiClient.post(`/users/${userId}/allergens/${allergenId}`);
-        } catch (e) {
-          console.warn('Error adding allergen', allergenId, e);
-        }
-      }
-
-      // 4) Add appliances to household
-      for (const appliance of selectedAppliances) {
-        try {
-          await apiClient.post(`/households/${householdId}/appliances?appliance=${appliance}`);
-        } catch (e) {
-          console.warn('Error adding appliance', appliance, e);
-        }
-      }
-
-      Alert.alert(
-        '¡Bienvenido, Chef! 🎉',
-        'Tu hogar y perfil han sido configurados correctamente.',
-        [{ text: 'Ir al Login', onPress: () => navigation.navigate('Login') }]
-      );
     } catch (e: any) {
       console.error('Error finishing setup:', e);
-      setLocalError(e?.response?.data?.message || 'Error al configurar tu hogar');
+      setLocalError(apiError || e?.response?.data?.message || 'Error al registrarte');
     } finally {
       setSaving(false);
     }
@@ -342,18 +325,19 @@ const RegisterScreen: React.FC = () => {
       prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
     );
   };
-  const toggleAppliance = (key: string) => {
+
+  const toggleAppliance = (id: string) => {
     setSelectedAppliances(prev =>
-      prev.includes(key) ? prev.filter(a => a !== key) : [...prev, key]
+      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
     );
   };
 
   // ── Step titles ──
   const stepMeta = [
     { icon: <User size={20} color={COLORS.white} />,             title: 'Crear cuenta',        subtitle: 'Tu información personal' },
-    { icon: <House size={20} color={COLORS.white} />,             title: 'Tu hogar',            subtitle: 'Configura tu unidad familiar' },
-    { icon: <ShieldAlert size={20} color={COLORS.white} />,      title: 'Alérgenos',           subtitle: 'Selecciona tus intolerancias' },
-    { icon: <UtensilsCrossed size={20} color={COLORS.white} />,  title: 'Electrodomésticos',   subtitle: '¿Qué tienes en tu cocina?' },
+    { icon: <House size={20} color={COLORS.white} />,             title: 'Tu hogar',            subtitle: 'Crea uno nuevo o unete con invitacion' },
+    { icon: <ShieldAlert size={20} color={COLORS.white} />,      title: 'Alérgenos',           subtitle: '¿Alguna intolerancia?' },
+    { icon: <UtensilsCrossed size={20} color={COLORS.white} />,  title: 'Electrodomésticos',   subtitle: '¿Con qué cocinas?' },
   ];
 
   const isLastStep = step === TOTAL_STEPS - 1;
@@ -362,7 +346,7 @@ const RegisterScreen: React.FC = () => {
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#0D1F17" />
       <View style={[styles.circle, styles.circle1]} />
       <View style={[styles.circle, styles.circle2]} />
 
@@ -410,7 +394,7 @@ const RegisterScreen: React.FC = () => {
             {/* ── Errors ── */}
             {(localError || apiError) && (
               <View style={styles.errorBanner}>
-                <Text style={styles.errorEmoji}>⚠️</Text>
+                <ShieldAlert size={18} color={COLORS.error} strokeWidth={2.4} />
                 <Text style={styles.errorText}>{localError || apiError}</Text>
               </View>
             )}
@@ -464,54 +448,107 @@ const RegisterScreen: React.FC = () => {
 
               {step === 1 && (
                 <View>
-                  {/* Household name */}
-                  <Text style={styles.fieldLabel}>Nombre del hogar</Text>
-                  <View style={styles.fieldWrap}>
-                    <House size={18} color={COLORS.text} opacity={0.45} />
-                    <TextInput
-                      style={styles.fieldInput}
-                      placeholder="Ej. Casa García"
-                      placeholderTextColor={COLORS.text + '44'}
-                      value={householdName}
-                      onChangeText={setHouseholdName}
-                      accessibilityLabel="Nombre del hogar"
-                    />
+                  <Text style={styles.fieldLabel}>Modo de hogar</Text>
+                  <View style={styles.modeRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.modeCard,
+                        householdMode === 'CREATE_NEW' && styles.modeCardSelected,
+                      ]}
+                      onPress={() => setHouseholdMode('CREATE_NEW')}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Crear un hogar nuevo"
+                    >
+                      <View style={styles.modeIconWrap}>
+                        <House
+                          size={16}
+                          color={householdMode === 'CREATE_NEW' ? COLORS.white : COLORS.primary}
+                          strokeWidth={2.5}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.modeTitle,
+                          householdMode === 'CREATE_NEW' && styles.modeTitleSelected,
+                        ]}
+                      >
+                        Crear nuevo
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.modeCard,
+                        householdMode === 'JOIN_EXISTING' && styles.modeCardSelected,
+                      ]}
+                      onPress={() => setHouseholdMode('JOIN_EXISTING')}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Unirme a un hogar existente"
+                    >
+                      <View style={styles.modeIconWrap}>
+                        <Users
+                          size={16}
+                          color={householdMode === 'JOIN_EXISTING' ? COLORS.white : COLORS.primary}
+                          strokeWidth={2.5}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.modeTitle,
+                          householdMode === 'JOIN_EXISTING' && styles.modeTitleSelected,
+                        ]}
+                      >
+                        Unirme
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
-                  {/* Member count */}
-                  <Text style={styles.fieldLabel}>Miembros de la unidad familiar</Text>
-                  <View style={styles.counterRow}>
-                    <TouchableOpacity
-                      style={[styles.counterBtn, memberCount <= 1 && styles.counterBtnDisabled]}
-                      onPress={() => setMemberCount(c => Math.max(1, c - 1))}
-                      disabled={memberCount <= 1}
-                      accessible
-                      accessibilityRole="button"
-                      accessibilityLabel="Reducir miembros"
-                    >
-                      <Text style={[styles.counterBtnText, memberCount <= 1 && { opacity: 0.3 }]}>−</Text>
-                    </TouchableOpacity>
-                    <View style={styles.counterDisplay}>
-                      <Text style={styles.counterValue}>{memberCount}</Text>
-                      <Text style={styles.counterLabel}>
-                        {memberCount === 1 ? 'persona' : 'personas'}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.counterBtn}
-                      onPress={() => setMemberCount(c => c + 1)}
-                      accessible
-                      accessibilityRole="button"
-                      accessibilityLabel="Añadir miembro"
-                    >
-                      <Text style={styles.counterBtnText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
+                  {householdMode === 'CREATE_NEW' ? (
+                    <>
+                      <Text style={styles.fieldLabel}>Nombre del hogar</Text>
+                      <View style={styles.fieldWrap}>
+                        <House size={18} color={COLORS.text} opacity={0.45} />
+                        <TextInput
+                          style={styles.fieldInput}
+                          placeholder="Ej. Casa Garcia"
+                          placeholderTextColor={COLORS.text + '44'}
+                          value={householdName}
+                          onChangeText={setHouseholdName}
+                          accessibilityLabel="Nombre del hogar"
+                        />
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.fieldLabel}>Token de invitacion</Text>
+                      <View style={styles.fieldWrap}>
+                        <Link2 size={18} color={COLORS.text} opacity={0.45} />
+                        <TextInput
+                          style={styles.fieldInput}
+                          placeholder="invite_xxx"
+                          placeholderTextColor={COLORS.text + '44'}
+                          value={inviteToken}
+                          onChangeText={setInviteToken}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          accessibilityLabel="Token de invitacion"
+                        />
+                      </View>
+                    </>
+                  )}
 
                   <View style={styles.infoCard}>
-                    <Text style={styles.infoEmoji}>🏠</Text>
+                    {householdMode === 'CREATE_NEW' ? (
+                      <House size={18} color={COLORS.primary} strokeWidth={2.4} />
+                    ) : (
+                      <Users size={18} color={COLORS.primary} strokeWidth={2.4} />
+                    )}
                     <Text style={styles.infoText}>
-                      El hogar agrupa a toda la familia. Podrás invitar a más miembros después.
+                      {householdMode === 'CREATE_NEW'
+                        ? 'Crearas un hogar nuevo y podras invitar a mas miembros despues.'
+                        : 'Usa el token de invitacion para unirte a un hogar existente.'}
                     </Text>
                   </View>
                 </View>
@@ -533,7 +570,7 @@ const RegisterScreen: React.FC = () => {
                         {allergenOptions.map(a => (
                           <ToggleChip
                             key={a.id}
-                            emoji={a.emoji}
+                            icon={a.icon}
                             label={a.name}
                             selected={selectedAllergens.includes(a.id)}
                             onToggle={() => toggleAllergen(a.id)}
@@ -543,7 +580,7 @@ const RegisterScreen: React.FC = () => {
                       </View>
                       {allergenOptions.length === 0 && (
                         <View style={styles.infoCard}>
-                          <Text style={styles.infoEmoji}>ℹ️</Text>
+                          <ShieldAlert size={18} color={COLORS.primary} strokeWidth={2.4} />
                           <Text style={styles.infoText}>
                             No se encontraron alérgenos en el sistema. Puedes añadirlos más tarde desde tu perfil.
                           </Text>
@@ -557,22 +594,23 @@ const RegisterScreen: React.FC = () => {
               {step === 3 && (
                 <View>
                   <Text style={styles.sectionNote}>
-                    Marca los electrodomésticos de tu cocina. Las recetas de IA se adaptarán a lo que tengas.
+                    Selecciona los electrodomésticos que tienes en casa para adaptar tus recetas.
                   </Text>
                   <View style={styles.chipGrid}>
-                    {APPLIANCES.map(a => (
+                    {APPLIANCE_OPTIONS.map(a => (
                       <ToggleChip
-                        key={a.key}
-                        emoji={a.emoji}
-                        label={a.label}
-                        selected={selectedAppliances.includes(a.key)}
-                        onToggle={() => toggleAppliance(a.key)}
-                        accessibilityHint={`Toca para ${selectedAppliances.includes(a.key) ? 'quitar' : 'añadir'} ${a.label}`}
+                        key={a.id}
+                        icon={APPLIANCE_ICONS[a.id] || UtensilsCrossed}
+                        label={a.name}
+                        selected={selectedAppliances.includes(a.id)}
+                        onToggle={() => toggleAppliance(a.id)}
+                        accessibilityHint={`Toca para ${selectedAppliances.includes(a.id) ? 'desactivar' : 'activar'} ${a.name}`}
                       />
                     ))}
                   </View>
                 </View>
               )}
+
             </Animated.View>
 
             {/* ── Action buttons ── */}
@@ -747,6 +785,44 @@ const styles = StyleSheet.create({
   fieldInput: {
     flex: 1, fontSize: 16, color: COLORS.text, fontWeight: '600',
   },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 18,
+  },
+  modeCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.text + '18',
+    paddingVertical: 12,
+    ...SHADOW_SM,
+  },
+  modeCardSelected: {
+    backgroundColor: MID_GREEN,
+    borderColor: DARK_GREEN,
+  },
+  modeIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary + '14',
+  },
+  modeTitle: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '700',
+  },
+  modeTitleSelected: {
+    color: COLORS.white,
+  },
 
   // Counter
   counterRow: {
@@ -789,18 +865,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 12,
     borderRadius: 14, backgroundColor: CARD_BG,
     borderWidth: 1.5, borderColor: COLORS.text + '15',
+    overflow: 'hidden',
     ...SHADOW_SM,
   },
   chipSelected: {
-    backgroundColor: COLORS.primary + '15',
-    borderColor: COLORS.primary,
+    backgroundColor: MID_GREEN,
+    borderColor: DARK_GREEN,
+    transform: [{ translateY: -1 }],
+    ...Platform.select({
+      ios: {
+        shadowColor: MID_GREEN,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.28,
+        shadowRadius: 10,
+      },
+      android: { elevation: 7 },
+    }),
   },
-  chipEmoji: { fontSize: 18 },
+  chipSelectedAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: ICE_BLUE,
+  },
+  chipIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary + '14',
+  },
+  chipIconWrapSelected: {
+    backgroundColor: ICE_BLUE,
+  },
   chipLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  chipLabelSelected: { color: COLORS.primary },
+  chipLabelSelected: { color: COLORS.white },
   chipCheck: {
     width: 20, height: 20, borderRadius: 10,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: COLORS.white + '44',
     justifyContent: 'center', alignItems: 'center',
   },
 

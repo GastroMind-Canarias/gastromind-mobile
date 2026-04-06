@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import {
-  Alert,
+  ActivityIndicator,
   Animated,
   Easing,
   FlatList,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -13,28 +13,116 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Camera,
+  Check,
+  Image as ImageIcon,
+  Pencil,
+  Plus,
+  Search,
+  ShieldAlert,
+  Snowflake,
+  Sparkles,
+  Ticket,
+  Trash2,
+  X,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { FridgeItem, ItemStatus } from '../../../core/domain/fridgeItem.types';
 import { COLORS } from '../../../shared/theme/colors';
 import { fridgeService } from '../../external/api/FridgeService';
+import { AppBottomSheet } from '../components/AppBottomSheet';
+import { AppDialog, type AppDialogAction } from '../components/AppDialog';
 
 // ─── Constantes de tema ───────────────────────────────────────────────────────
 const FRIDGE_DARK = '#0D1F17';   // verde muy oscuro (panel nevera)
 const FRIDGE_MID = '#1A3826';   // verde oscuro medio
-const FRIDGE_PANEL = '#142D1F';   // fondo panel interior
 const ICE_BLUE = '#C8F0DC';   // tinte helado suave
 
 // ─── Status config ────────────────────────────────────────────────────────────
-const STATUS_CONFIG: Record<ItemStatus, { color: string; emoji: string; label: string; bg: string }> = {
-  [ItemStatus.GOOD]: { color: COLORS.primary, emoji: '✅', label: 'Fresco', bg: COLORS.primary + '22' },
-  [ItemStatus.OPENED]: { color: COLORS.accent, emoji: '📂', label: 'Abierto', bg: COLORS.accent + '22' },
-  [ItemStatus.EXPIRED]: { color: COLORS.error, emoji: '⚠️', label: 'Caducado', bg: COLORS.error + '22' },
+const STATUS_CONFIG: Record<
+  ItemStatus,
+  { color: string; icon: LucideIcon; label: string; bg: string }
+> = {
+  [ItemStatus.GOOD]: {
+    color: COLORS.primary,
+    icon: Check,
+    label: 'Fresco',
+    bg: COLORS.primary + '22',
+  },
+  [ItemStatus.OPENED]: {
+    color: COLORS.accent,
+    icon: Sparkles,
+    label: 'Abierto',
+    bg: COLORS.accent + '22',
+  },
+  [ItemStatus.EXPIRED]: {
+    color: COLORS.error,
+    icon: ShieldAlert,
+    label: 'Caducado',
+    bg: COLORS.error + '22',
+  },
 };
 
+function getExpiryMeta(expirationDate: string, status: ItemStatus) {
+  if (status === ItemStatus.EXPIRED) {
+    return {
+      label: 'Caducado',
+      color: COLORS.error,
+      bg: COLORS.error + '18',
+      border: COLORS.error + '4D',
+    };
+  }
+
+  const exp = new Date(expirationDate + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (Number.isNaN(days)) {
+    return {
+      label: 'Fecha no válida',
+      color: COLORS.text,
+      bg: COLORS.text + '10',
+      border: COLORS.text + '22',
+    };
+  }
+
+  if (days <= 2) {
+    return {
+      label: days <= 0 ? 'Vence hoy' : `${days} día${days === 1 ? '' : 's'}`,
+      color: COLORS.accent,
+      bg: COLORS.accent + '18',
+      border: COLORS.accent + '4D',
+    };
+  }
+
+  return {
+    label: `${days} días`,
+    color: COLORS.primary,
+    bg: COLORS.primary + '14',
+    border: COLORS.primary + '44',
+  };
+}
+
 // ─── Stat chip ────────────────────────────────────────────────────────────────
-function StatChip({ emoji, count, label, color }: { emoji: string; count: number; label: string; color: string }) {
+function StatChip({
+  icon: Icon,
+  count,
+  label,
+  color,
+}: {
+  icon: LucideIcon;
+  count: number;
+  label: string;
+  color: string;
+}) {
   return (
     <View style={[styles.statChip, { borderColor: color + '55', backgroundColor: color + '18' }]}>
-      <Text style={styles.statEmoji}>{emoji}</Text>
+      <View style={[styles.statIconWrap, { backgroundColor: color + '24' }]}>
+        <Icon size={13} color={color} strokeWidth={2.6} />
+      </View>
       <Text style={[styles.statCount, { color }]}>{count}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
@@ -45,44 +133,56 @@ function StatChip({ emoji, count, label, color }: { emoji: string; count: number
 function ItemCard({
   item, onEdit, onDelete,
 }: { item: FridgeItem; onEdit: () => void; onDelete: () => void }) {
-  const cfg = STATUS_CONFIG[item.status];
+  const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG[ItemStatus.GOOD];
+  const StatusIcon = cfg.icon;
+  const expiryMeta = getExpiryMeta(item.expirationDate, item.status);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pressIn = () => Animated.spring(scaleAnim, { toValue: 0.975, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
   const pressOut = () => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
 
   return (
-    <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
-      {/* Accent strip */}
+    <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}> 
       <View style={[styles.cardStrip, { backgroundColor: cfg.color }]} />
 
       <View style={styles.cardBody}>
-        {/* Row principal */}
         <View style={styles.cardTop}>
-          <View style={[styles.cardIconWrap, { backgroundColor: cfg.bg }]}>
-            <Text style={styles.cardIconEmoji}>{cfg.emoji}</Text>
+          <View style={[styles.cardIconWrap, { backgroundColor: cfg.bg, borderColor: cfg.color + '2A' }]}> 
+            <StatusIcon size={20} color={cfg.color} strokeWidth={2.6} />
           </View>
           <View style={styles.cardMeta}>
             <Text style={styles.cardTitle} numberOfLines={1}>{item.product}</Text>
-            <Text style={styles.cardSub}>
-              Cantidad: <Text style={styles.cardSubBold}>{item.quantity}</Text>
-              {'   '}Cad: <Text style={styles.cardSubBold}>{item.expirationDate}</Text>
-            </Text>
+            <View style={styles.cardSubRow}>
+              <Text style={styles.cardSubKey}>Cant.</Text>
+              <Text style={styles.cardSubValue}>{item.quantity} uds.</Text>
+              <Text style={styles.cardSubDot}>•</Text>
+              <Text style={styles.cardSubKey}>Cad.</Text>
+              <Text style={styles.cardSubValue}>{item.expirationDate}</Text>
+            </View>
           </View>
-          <View style={[styles.statusPill, { backgroundColor: cfg.bg, borderColor: cfg.color + '55' }]}>
+          <View style={[styles.statusPill, { backgroundColor: cfg.bg, borderColor: cfg.color + '55' }]}> 
             <Text style={[styles.statusPillText, { color: cfg.color }]}>{cfg.label}</Text>
           </View>
         </View>
 
-        {/* Divider */}
         <View style={styles.cardDivider} />
 
-        {/* Actions */}
+        <View style={styles.metaRow}>
+          <View style={styles.metaPill}>
+            <Snowflake size={13} color={COLORS.primary} strokeWidth={2.5} />
+            <Text style={styles.metaPillText}>{item.quantity} uds.</Text>
+          </View>
+          <View style={[styles.metaPill, { backgroundColor: expiryMeta.bg, borderColor: expiryMeta.border }]}> 
+            <StatusIcon size={13} color={expiryMeta.color} strokeWidth={2.5} />
+            <Text style={[styles.metaPillText, { color: expiryMeta.color }]}>{expiryMeta.label}</Text>
+          </View>
+        </View>
+
         <View style={styles.cardActions}>
           <TouchableOpacity
             onPress={onEdit} onPressIn={pressIn} onPressOut={pressOut}
             style={styles.cardBtn}
           >
-            <Text style={styles.cardBtnIcon}>✏️</Text>
+            <Pencil size={14} color={COLORS.primary} strokeWidth={2.6} />
             <Text style={[styles.cardBtnText, { color: COLORS.primary }]}>Editar</Text>
           </TouchableOpacity>
           <View style={styles.cardBtnSep} />
@@ -90,7 +190,7 @@ function ItemCard({
             onPress={onDelete} onPressIn={pressIn} onPressOut={pressOut}
             style={styles.cardBtn}
           >
-            <Text style={styles.cardBtnIcon}>🗑️</Text>
+            <Trash2 size={14} color={COLORS.error} strokeWidth={2.6} />
             <Text style={[styles.cardBtnText, { color: COLORS.error }]}>Eliminar</Text>
           </TouchableOpacity>
         </View>
@@ -99,33 +199,156 @@ function ItemCard({
   );
 }
 
-// ─── Ticket modal placeholder ─────────────────────────────────────────────────
+// ─── Ticket modal ─────────────────────────────────────────────────────────────
 function TicketModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [dialog, setDialog] = useState<{
+    title: string;
+    message: string;
+    variant?: 'info' | 'success' | 'warning' | 'danger';
+    actions: AppDialogAction[];
+  } | null>(null);
+
+  const closeDialog = () => setDialog(null);
+  const showDialog = (config: {
+    title: string;
+    message: string;
+    variant?: 'info' | 'success' | 'warning' | 'danger';
+    actions?: AppDialogAction[];
+  }) => {
+    setDialog({
+      title: config.title,
+      message: config.message,
+      variant: config.variant,
+      actions: config.actions ?? [{ label: 'Cerrar', onPress: closeDialog }],
+    });
+  };
+
+  const handlePickImage = async (useCamera: boolean) => {
+    try {
+      let result;
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          showDialog({
+            title: 'Permiso denegado',
+            message: 'Necesitamos acceso a la cámara para escanear el ticket.',
+            variant: 'warning',
+          });
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          quality: 0.8,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          showDialog({
+            title: 'Permiso denegado',
+            message: 'Necesitamos acceso a tus fotos para elegir el ticket.',
+            variant: 'warning',
+          });
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          allowsEditing: true,
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        // Simulación de procesamiento IA / OCR
+        setIsProcessing(true);
+        
+        // Simulamos un retraso de procesamiento de 2.5 segundos
+        setTimeout(() => {
+          setIsProcessing(false);
+          showDialog({
+            title: 'Ticket procesado',
+            message:
+              'GastroMind ha analizado el ticket y ha encontrado 3 productos nuevos. Se han añadido a tu nevera.',
+            variant: 'success',
+            actions: [{ label: 'Genial', onPress: onClose }],
+          });
+        }, 2500);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      showDialog({
+        title: 'Error',
+        message: 'Hubo un problema al intentar abrir la cámara o galería.',
+        variant: 'danger',
+      });
+      setIsProcessing(false);
+    }
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalOverlay}>
-        <View style={styles.sheetWrap}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>🎫 Importar desde ticket</Text>
+    <>
+      <AppBottomSheet
+        visible={visible}
+        onClose={onClose}
+        title="Importar desde ticket"
+        icon={Ticket}
+      >
+          
           <View style={styles.ticketPlaceholder}>
-            <Text style={styles.ticketPH_Icon}>🎫</Text>
-            <Text style={styles.ticketPH_Title}>Escanea tu ticket de compra</Text>
-            <Text style={styles.ticketPH_Sub}>
-              Haz una foto a tu ticket y GastroMind añadirá los productos automáticamente a tu nevera.
-            </Text>
-            <TouchableOpacity style={styles.ticketCameraBtn} onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto.')}>
-              <Text style={styles.ticketCameraBtnText}>📷  Hacer foto</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.ticketGalleryBtn} onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto.')}>
-              <Text style={styles.ticketGalleryBtnText}>🖼️  Elegir de galería</Text>
-            </TouchableOpacity>
+            {isProcessing ? (
+              <View style={styles.processingWrap}>
+                <View style={styles.loadingPulse}>
+                   <Ticket size={40} color={COLORS.primary} strokeWidth={2} />
+                </View>
+                <Text style={styles.processingTitle}>Analizando ticket...</Text>
+                <Text style={styles.processingSub}>Nuestra IA está extrayendo los productos y fechas de caducidad.</Text>
+                <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 20 }} />
+              </View>
+            ) : (
+              <>
+                <View style={styles.ticketPH_IconWrap}>
+                  <Ticket size={34} color={COLORS.primary} strokeWidth={2.4} />
+                </View>
+                <Text style={styles.ticketPH_Title}>Escanea tu ticket de compra</Text>
+                <Text style={styles.ticketPH_Sub}>
+                  Haz una foto a tu ticket y GastroMind añadirá los productos automáticamente a tu nevera.
+                </Text>
+                
+                <TouchableOpacity 
+                  style={styles.ticketCameraBtn} 
+                  onPress={() => handlePickImage(true)}
+                  activeOpacity={0.8}
+                >
+                  <Camera size={15} color={COLORS.white} strokeWidth={2.6} />
+                  <Text style={styles.ticketCameraBtnText}>Hacer foto</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.ticketGalleryBtn} 
+                  onPress={() => handlePickImage(false)}
+                  activeOpacity={0.8}
+                >
+                  <ImageIcon size={15} color={COLORS.primary} strokeWidth={2.6} />
+                  <Text style={styles.ticketGalleryBtnText}>Elegir de galería</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.sheetCloseBtn}>
-            <Text style={styles.sheetCloseBtnText}>Cerrar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+
+          {!isProcessing && (
+            <TouchableOpacity onPress={onClose} style={styles.sheetCloseBtn}>
+              <Text style={styles.sheetCloseBtnText}>Cerrar</Text>
+            </TouchableOpacity>
+          )}
+      </AppBottomSheet>
+      <AppDialog
+        visible={!!dialog}
+        title={dialog?.title ?? ''}
+        message={dialog?.message ?? ''}
+        variant={dialog?.variant}
+        actions={dialog?.actions ?? [{ label: 'Cerrar', onPress: closeDialog }]}
+        onClose={closeDialog}
+      />
+    </>
   );
 }
 
@@ -142,11 +365,12 @@ function ItemFormModal({
   onSave: () => void; onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalOverlay}>
-        <View style={styles.sheetWrap}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>{editingId ? '✏️ Editar producto' : '➕ Nuevo producto'}</Text>
+    <AppBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={editingId ? 'Editar producto' : 'Nuevo producto'}
+      icon={editingId ? Pencil : Plus}
+    >
 
           <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
             <Text style={styles.fieldLabel}>Nombre</Text>
@@ -172,16 +396,20 @@ function ItemFormModal({
 
             <Text style={styles.fieldLabel}>Estado</Text>
             <View style={styles.statusRow}>
-              {Object.values(ItemStatus).map(s => {
-                const cfg = STATUS_CONFIG[s];
+              {[ItemStatus.GOOD, ItemStatus.OPENED, ItemStatus.EXPIRED].map(s => {
+                const cfg = STATUS_CONFIG[s] || STATUS_CONFIG[ItemStatus.GOOD];
                 const active = status === s;
                 return (
                   <TouchableOpacity
                     key={s} onPress={() => setStatus(s)}
                     style={[styles.statusOpt, active && { backgroundColor: cfg.color, borderColor: cfg.color }]}
                   >
-                    <Text style={styles.statusOptEmoji}>{cfg.emoji}</Text>
-                    <Text style={[styles.statusOptLabel, { color: active ? COLORS.white : COLORS.text }]}>
+                    <cfg.icon
+                      size={16}
+                      color={active ? COLORS.white : cfg.color}
+                      strokeWidth={2.6}
+                    />
+                    <Text style={[styles.statusOptLabel, { color: active ? COLORS.white : COLORS.text }]}> 
                       {cfg.label}
                     </Text>
                   </TouchableOpacity>
@@ -198,18 +426,17 @@ function ItemFormModal({
                 style={[styles.formBtnSave, !productName.trim() && { opacity: 0.4 }]}
                 disabled={!productName.trim()}
               >
-                <Text style={styles.formBtnSaveText}>💾 Guardar</Text>
+                <Text style={styles.formBtnSaveText}>Guardar</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
-        </View>
-      </View>
-    </Modal>
+    </AppBottomSheet>
   );
 }
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 export default function FridgeApp() {
+  const insets = useSafeAreaInsets();
   const [items, setItems] = useState<FridgeItem[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showTicket, setShowTicket] = useState(false);
@@ -219,8 +446,30 @@ export default function FridgeApp() {
   const [expDate, setExpDate] = useState('2026-12-31');
   const [status, setStatus] = useState<ItemStatus>(ItemStatus.GOOD);
   const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'ALL' | ItemStatus>('ALL');
+  const [dialog, setDialog] = useState<{
+    title: string;
+    message: string;
+    variant?: 'info' | 'success' | 'warning' | 'danger';
+    actions: AppDialogAction[];
+  } | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const closeDialog = () => setDialog(null);
+  const showDialog = (config: {
+    title: string;
+    message: string;
+    variant?: 'info' | 'success' | 'warning' | 'danger';
+    actions?: AppDialogAction[];
+  }) => {
+    setDialog({
+      title: config.title,
+      message: config.message,
+      variant: config.variant,
+      actions: config.actions ?? [{ label: 'Cerrar', onPress: closeDialog }],
+    });
+  };
 
   useEffect(() => {
     refresh();
@@ -268,19 +517,31 @@ export default function FridgeApp() {
   };
 
   const handleDelete = (item: FridgeItem) => {
-    Alert.alert(
-      'Eliminar producto',
-      `¿Eliminar "${item.product}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar', style: 'destructive', onPress: async () => { await fridgeService.delete(item.id); refresh(); } },
-      ]
-    );
+    showDialog({
+      title: 'Eliminar producto',
+      message: `¿Eliminar "${item.product}"?`,
+      variant: 'warning',
+      actions: [
+        { label: 'Cancelar', tone: 'secondary', onPress: closeDialog },
+        {
+          label: 'Eliminar',
+          tone: 'danger',
+          onPress: async () => {
+            closeDialog();
+            await fridgeService.delete(item.id);
+            refresh();
+          },
+        },
+      ],
+    });
   };
 
-  const filtered = search.trim()
-    ? items.filter(i => i.product.toLowerCase().includes(search.toLowerCase()))
-    : items;
+  let filtered = activeFilter === 'ALL'
+    ? items
+    : items.filter(i => i.status === activeFilter);
+  if (search.trim()) {
+    filtered = filtered.filter(i => i.product.toLowerCase().includes(search.toLowerCase()));
+  }
 
   const counts = {
     good: items.filter(i => i.status === ItemStatus.GOOD).length,
@@ -290,6 +551,8 @@ export default function FridgeApp() {
 
   return (
     <View style={styles.root}>
+      <View style={styles.ambientOrbA} />
+      <View style={styles.ambientOrbB} />
 
       {/* ══ FRIDGE PANEL HEADER ══ */}
       <View style={styles.fridgeHeader}>
@@ -297,7 +560,7 @@ export default function FridgeApp() {
         <View style={styles.fridgeTopBar}>
           <View style={styles.fridgeTopBarLeft}>
             <View style={styles.fridgeLed} />
-            <Text style={styles.fridgeHeaderLabel}>Nevera Principal</Text>
+            <Text style={styles.fridgeHeaderLabel}>Almacen frío principal</Text>
           </View>
           <View style={styles.fridgeTempBadge}>
             <Text style={styles.fridgeTempText}>4 °C</Text>
@@ -305,26 +568,27 @@ export default function FridgeApp() {
         </View>
 
         {/* Title */}
-        <Text style={styles.fridgeTitle}>Mi Nevera</Text>
+        <Text style={styles.fridgeTitle}>Control de almacen</Text>
 
         {/* Stats */}
         <View style={styles.statsRow}>
-          <StatChip emoji="✅" count={counts.good} label="Frescos" color={COLORS.primary} />
-          <StatChip emoji="📂" count={counts.opened} label="Abiertos" color={COLORS.accent} />
-          <StatChip emoji="⚠️" count={counts.expired} label="Caducados" color={COLORS.error} />
+          <StatChip icon={Check} count={counts.good} label="Frescos" color={COLORS.primary} />
+          <StatChip icon={Sparkles} count={counts.opened} label="Abiertos" color={COLORS.accent} />
+          <StatChip icon={ShieldAlert} count={counts.expired} label="Caducados" color={COLORS.error} />
         </View>
 
         {/* Action buttons */}
         <View style={styles.headerActions}>
           {/* Ticket button */}
           <TouchableOpacity style={styles.ticketBtn} onPress={() => setShowTicket(true)}>
-            <Text style={styles.ticketBtnIcon}>🎫</Text>
+            <Ticket size={15} color={ICE_BLUE} strokeWidth={2.5} />
             <Text style={styles.ticketBtnText}>Importar ticket</Text>
           </TouchableOpacity>
 
           {/* Add button */}
           <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
-            <Text style={styles.addBtnText}>＋ Añadir</Text>
+            <Plus size={15} color={COLORS.white} strokeWidth={2.9} />
+            <Text style={styles.addBtnText}>Añadir</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -333,7 +597,7 @@ export default function FridgeApp() {
       <View style={styles.fridgeBody}>
         {/* Search bar */}
         <View style={styles.searchWrap}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Search size={15} color={COLORS.text + '88'} strokeWidth={2.6} />
           <TextInput
             style={styles.searchInput}
             placeholder="Buscar producto..."
@@ -343,35 +607,74 @@ export default function FridgeApp() {
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <Text style={styles.searchClear}>✕</Text>
+              <X size={16} color={COLORS.text + '88'} strokeWidth={2.8} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Section label */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            {filtered.length === 0 ? 'Sin resultados' : `${filtered.length} producto${filtered.length !== 1 ? 's' : ''}`}
-          </Text>
-          <View style={styles.sectionLine} />
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersRow}
+          style={{ flexGrow: 0, maxHeight: 36, marginBottom: 16 }}
+        >
+          <TouchableOpacity
+            onPress={() => setActiveFilter('ALL')}
+            style={[styles.filterPill, activeFilter === 'ALL' && styles.filterPillActive]}
+          >
+            <Search
+              size={14}
+              color={activeFilter === 'ALL' ? COLORS.white : COLORS.text + '99'}
+              strokeWidth={2.6}
+            />
+            <Text style={[styles.filterPillText, activeFilter === 'ALL' && styles.filterPillTextActive]}>
+              Todas
+            </Text>
+          </TouchableOpacity>
+
+          {([ItemStatus.GOOD, ItemStatus.OPENED, ItemStatus.EXPIRED] as const).map(s => {
+            const cfg = STATUS_CONFIG[s] || STATUS_CONFIG[ItemStatus.GOOD];
+            const FilterIcon = cfg.icon;
+            const active = activeFilter === s;
+            return (
+              <TouchableOpacity
+                key={s}
+                onPress={() => setActiveFilter(s)}
+                style={[
+                  styles.filterPill,
+                  active && { backgroundColor: cfg.color, borderColor: cfg.color },
+                ]}
+              >
+                <FilterIcon
+                  size={14}
+                  color={active ? COLORS.white : cfg.color}
+                  strokeWidth={2.6}
+                />
+                <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>{cfg.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         {/* Item list */}
-        <Animated.View style={[{ flex: 1 }, { opacity: fadeAnim }]}>
+        <Animated.View style={[styles.listContainer, { opacity: fadeAnim }]}> 
           {filtered.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🧊</Text>
+              <View style={styles.emptyIconWrap}>
+                <Snowflake size={34} color={COLORS.primary} strokeWidth={2.4} />
+              </View>
               <Text style={styles.emptyTitle}>
                 {search.trim() ? 'No encontrado' : 'Nevera vacía'}
               </Text>
               <Text style={styles.emptySub}>
                 {search.trim()
                   ? `No hay productos con "${search}"`
-                  : 'Pulsa ＋ Añadir o importa un ticket'}
+                  : 'Pulsa Añadir o importa un ticket'}
               </Text>
             </View>
           ) : (
             <FlatList
+              style={styles.list}
               data={filtered}
               keyExtractor={i => i.id}
               renderItem={({ item }) => (
@@ -381,7 +684,10 @@ export default function FridgeApp() {
                   onDelete={() => handleDelete(item)}
                 />
               )}
-              contentContainerStyle={{ paddingBottom: 32 }}
+              contentContainerStyle={[
+                styles.listContent,
+                { paddingBottom: Math.max(32, insets.bottom + 24) },
+              ]}
               showsVerticalScrollIndicator={false}
             />
           )}
@@ -398,6 +704,14 @@ export default function FridgeApp() {
         onSave={handleSave} onClose={() => setShowForm(false)}
       />
       <TicketModal visible={showTicket} onClose={() => setShowTicket(false)} />
+      <AppDialog
+        visible={!!dialog}
+        title={dialog?.title ?? ''}
+        message={dialog?.message ?? ''}
+        variant={dialog?.variant}
+        actions={dialog?.actions ?? [{ label: 'Cerrar', onPress: closeDialog }]}
+        onClose={closeDialog}
+      />
     </View>
   );
 }
@@ -418,6 +732,24 @@ const SHADOW_PRIMARY = Platform.select({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#E9F5EE' },
+  ambientOrbA: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: COLORS.primary + '22',
+  },
+  ambientOrbB: {
+    position: 'absolute',
+    top: 120,
+    right: -70,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: '#BCECCE66',
+  },
 
   // ── Fridge Header (top panel)
   fridgeHeader: {
@@ -425,8 +757,10 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 58 : 44,
     paddingHorizontal: 22,
     paddingBottom: 22,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
+    borderWidth: 1,
+    borderColor: '#205636',
     ...SHADOW_MD,
   },
   fridgeTopBar: {
@@ -442,7 +776,7 @@ const styles = StyleSheet.create({
       android: { elevation: 2 },
     }),
   },
-  fridgeHeaderLabel: { color: ICE_BLUE, fontSize: 12, fontWeight: '600', letterSpacing: 1, opacity: 0.8 },
+  fridgeHeaderLabel: { color: ICE_BLUE, fontSize: 11, fontWeight: '700', letterSpacing: 1.1, opacity: 0.82, textTransform: 'uppercase' },
   fridgeTempBadge: {
     backgroundColor: FRIDGE_MID, borderRadius: 20,
     paddingHorizontal: 12, paddingVertical: 5,
@@ -451,17 +785,24 @@ const styles = StyleSheet.create({
   fridgeTempText: { color: ICE_BLUE, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
 
   fridgeTitle: {
-    fontSize: 34, fontWeight: '800', color: '#FFFFFF',
-    letterSpacing: -0.8, marginBottom: 18,
+    fontSize: 32, fontWeight: '800', color: '#FFFFFF',
+    letterSpacing: -0.9, marginBottom: 14,
   },
 
   // Stats
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   statChip: {
     flex: 1, alignItems: 'center', paddingVertical: 10,
     borderRadius: 14, borderWidth: 1.5,
   },
-  statEmoji: { fontSize: 16, marginBottom: 2 },
+  statIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   statCount: { fontSize: 20, fontWeight: '800' },
   statLabel: { fontSize: 10, color: ICE_BLUE, opacity: 0.7, fontWeight: '600' },
 
@@ -473,10 +814,13 @@ const styles = StyleSheet.create({
     backgroundColor: FRIDGE_MID,
     borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.primary + '40',
   },
-  ticketBtnIcon: { fontSize: 17 },
   ticketBtnText: { color: ICE_BLUE, fontWeight: '700', fontSize: 14 },
   addBtn: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
     paddingVertical: 13,
     backgroundColor: COLORS.primary,
     borderRadius: 14,
@@ -489,61 +833,167 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 18,
     paddingTop: 20,
+    paddingBottom: 6,
+  },
+
+  // List
+  listContainer: {
+    flex: 1,
+    minHeight: 0,
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    paddingTop: 2,
   },
 
   // Search
   searchWrap: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.white,
-    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11,
-    marginBottom: 18,
+    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 11,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '16',
     ...SHADOW_SM,
   },
-  searchIcon: { fontSize: 15, marginRight: 8 },
   searchInput: { flex: 1, fontSize: 15, color: COLORS.text },
-  searchClear: { fontSize: 16, color: COLORS.text, opacity: 0.35, paddingLeft: 8 },
-
-  // Section header
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 10 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: COLORS.text, opacity: 0.45, letterSpacing: 0.8, textTransform: 'uppercase' },
-  sectionLine: { flex: 1, height: 1, backgroundColor: COLORS.text + '15' },
+  filtersRow: { gap: 8, paddingBottom: 0 },
+  filterPill: {
+    height: 34,
+    borderRadius: 17,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: COLORS.text + '18',
+    backgroundColor: COLORS.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  filterPillActive: {
+    backgroundColor: COLORS.text,
+    borderColor: COLORS.text,
+  },
+  filterPillText: {
+    fontSize: 12,
+    color: COLORS.text,
+    fontWeight: '700',
+  },
+  filterPillTextActive: {
+    color: COLORS.white,
+  },
 
   // ── Item card
   card: {
-    backgroundColor: COLORS.white,
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     marginBottom: 12,
     flexDirection: 'row',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#DDEBE2',
     ...SHADOW_SM,
   },
-  cardStrip: { width: 5 },
-  cardBody: { flex: 1, padding: 14 },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cardStrip: { width: 3 },
+  cardBody: { flex: 1, paddingHorizontal: 14, paddingVertical: 12 },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   cardIconWrap: {
-    width: 44, height: 44, borderRadius: 12,
+    width: 38, height: 38, borderRadius: 11,
     justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1,
   },
-  cardIconEmoji: { fontSize: 22 },
   cardMeta: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  cardSub: { fontSize: 12, color: COLORS.text, opacity: 0.5, marginTop: 2 },
-  cardSubBold: { fontWeight: '700', opacity: 1 },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1D3026',
+    letterSpacing: -0.1,
+    marginBottom: 5,
+  },
+  cardSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  cardSubKey: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#75887E',
+    textTransform: 'uppercase',
+    letterSpacing: 0.35,
+  },
+  cardSubValue: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#3D5348',
+  },
+  cardSubDot: {
+    fontSize: 12,
+    color: '#9AABA2',
+    marginHorizontal: 3,
+  },
   statusPill: {
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 20,
     borderWidth: 1.2, alignSelf: 'flex-start',
   },
-  statusPillText: { fontSize: 11, fontWeight: '700' },
-  cardDivider: { height: 1, backgroundColor: COLORS.text + '08', marginVertical: 10 },
-  cardActions: { flexDirection: 'row', alignItems: 'center' },
-  cardBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 4 },
-  cardBtnIcon: { fontSize: 14 },
-  cardBtnText: { fontSize: 13, fontWeight: '700' },
-  cardBtnSep: { width: 1, height: 18, backgroundColor: COLORS.text + '12' },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.25,
+    textTransform: 'uppercase',
+  },
+  cardDivider: { height: 1, backgroundColor: '#E8F0EB', marginVertical: 9 },
+  metaRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  metaPill: {
+    borderRadius: 999,
+    paddingVertical: 3,
+    paddingHorizontal: 2,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  metaPillText: {
+    fontSize: 11,
+    color: '#5B7065',
+    fontWeight: '600',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#EDF4EF',
+    paddingTop: 7,
+  },
+  cardBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 6,
+  },
+  cardBtnText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.15 },
+  cardBtnSep: { width: 1, height: 14, backgroundColor: '#E3EEE7' },
 
   // ── Empty state
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 80 },
-  emptyEmoji: { fontSize: 72, marginBottom: 16 },
+  emptyIconWrap: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary + '14',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '34',
+  },
   emptyTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text, opacity: 0.8 },
   emptySub: { fontSize: 14, color: COLORS.text, opacity: 0.45, marginTop: 6, textAlign: 'center' },
 
@@ -562,9 +1012,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center', width: 38, height: 5,
     backgroundColor: COLORS.text + '1A', borderRadius: 3, marginBottom: 20,
   },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 22,
+  },
   sheetTitle: {
     fontSize: 20, fontWeight: '800', color: COLORS.text,
-    textAlign: 'center', marginBottom: 22,
+    textAlign: 'center',
   },
   sheetCloseBtn: {
     marginTop: 16, paddingVertical: 14,
@@ -581,24 +1038,60 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed', marginBottom: 8,
     paddingHorizontal: 20,
   },
-  ticketPH_Icon: { fontSize: 56, marginBottom: 12 },
+  ticketPH_IconWrap: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary + '12',
+  },
   ticketPH_Title: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 8 },
   ticketPH_Sub: {
     fontSize: 13, color: COLORS.text, opacity: 0.55,
     textAlign: 'center', lineHeight: 19, marginBottom: 22,
   },
   ticketCameraBtn: {
-    width: '100%', paddingVertical: 15, borderRadius: 14,
-    backgroundColor: COLORS.primary, alignItems: 'center', marginBottom: 10,
+    width: '100%',
+    paddingVertical: 15,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
     ...SHADOW_PRIMARY,
   },
   ticketCameraBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
   ticketGalleryBtn: {
-    width: '100%', paddingVertical: 14, borderRadius: 14,
-    backgroundColor: COLORS.background, alignItems: 'center',
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
     borderWidth: 1.5, borderColor: COLORS.primary + '44',
   },
   ticketGalleryBtnText: { color: COLORS.primary, fontWeight: '700', fontSize: 15 },
+
+  // Processing state styles
+  processingWrap: {
+    alignItems: 'center', paddingVertical: 40, width: '100%',
+  },
+  loadingPulse: {
+     marginBottom: 20,
+     transform: [{ scale: 1.1 }],
+     opacity: 0.8,
+  },
+  processingTitle: { fontSize: 18, fontWeight: '900', color: COLORS.primary, marginBottom: 8 },
+  processingSub: {
+    fontSize: 13, color: COLORS.text, opacity: 0.55,
+    textAlign: 'center', lineHeight: 19, paddingHorizontal: 20,
+  },
 
   // Form fields
   fieldLabel: {
@@ -615,7 +1108,6 @@ const styles = StyleSheet.create({
     borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.text + '18',
     backgroundColor: '#F4FAF6',
   },
-  statusOptEmoji: { fontSize: 20, marginBottom: 4 },
   statusOptLabel: { fontSize: 11, fontWeight: '700' },
   formFooter: { flexDirection: 'row', gap: 12, marginBottom: 8 },
   formBtnCancel: {

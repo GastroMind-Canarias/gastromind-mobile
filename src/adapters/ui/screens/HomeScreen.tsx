@@ -1,24 +1,36 @@
 import { useNavigation } from "@react-navigation/native";
 import * as React from "react";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  ChefHat,
+  ChevronRight,
+  Home,
+  LogOut,
+  ShieldAlert,
+  Snowflake,
+  Sparkles,
+  User,
+  UtensilsCrossed,
+  type LucideIcon,
+} from "lucide-react-native";
 import { FridgeItem, ItemStatus } from "../../../core/domain/fridgeItem.types";
 import { COLORS } from "../../../shared/theme/colors";
 import { fridgeService } from "../../external/api/FridgeService";
 import { profileService } from "../../external/api/ProfileService";
-import { AuthContext } from "../navigation/AuthContext";
-import { ActivityIndicator } from "react-native";
 import { UserProfile } from "../../../core/domain/profile.types";
+import { useAuth } from "../hooks/useAuth";
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = "#0D1F17";
@@ -34,15 +46,8 @@ function getGreeting(): string {
 }
 
 // ─── Avatar mini ──────────────────────────────────────────────────────────────
-function Avatar({ name, size = 44 }: { name: string; size?: number }) {
-  const initials = name
-    .trim()
-    .split(" ")
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("")
-    .slice(0, 2);
-  const palette = ["#4dc763", "#FF9F1C", "#5BBCFF", "#C879FF", "#FF6B6B"];
-  const bg = palette[name.charCodeAt(0) % palette.length];
+function Avatar({ name: _name, size = 44 }: { name: string; size?: number }) {
+  const iconSize = Math.max(14, size * 0.45);
   return (
     <View
       style={[
@@ -50,27 +55,25 @@ function Avatar({ name, size = 44 }: { name: string; size?: number }) {
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: bg,
+          backgroundColor: COLORS.primary,
           justifyContent: "center",
           alignItems: "center",
         },
       ]}
     >
-      <Text style={{ color: "#fff", fontWeight: "800", fontSize: size * 0.38 }}>
-        {initials}
-      </Text>
+      <User size={iconSize} color={COLORS.white} strokeWidth={2.5} />
     </View>
   );
 }
 
 // ─── Stat chip (la misma que en las otras pantallas) ─────────────────────────
 function StatChip({
-  emoji,
+  icon: Icon,
   value,
   label,
   color,
 }: {
-  emoji: string;
+  icon: LucideIcon;
   value: string | number;
   label: string;
   color: string;
@@ -82,7 +85,9 @@ function StatChip({
         { borderColor: color + "55", backgroundColor: color + "18" },
       ]}
     >
-      <Text style={styles.statEmoji}>{emoji}</Text>
+      <View style={[styles.statIconWrap, { backgroundColor: color + "28" }]}> 
+        <Icon size={12} color={color} strokeWidth={2.5} />
+      </View>
       <Text style={[styles.statValue, { color }]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
@@ -91,13 +96,13 @@ function StatChip({
 
 // ─── Quick-action card ────────────────────────────────────────────────────────
 function QuickCard({
-  emoji,
+  icon: Icon,
   title,
   subtitle,
   accentColor,
   onPress,
 }: {
-  emoji: string;
+  icon: LucideIcon;
   title: string;
   subtitle: string;
   accentColor: string;
@@ -138,7 +143,7 @@ function QuickCard({
               { backgroundColor: accentColor + "22" },
             ]}
           >
-            <Text style={styles.quickCardEmoji}>{emoji}</Text>
+            <Icon size={20} color={accentColor} strokeWidth={2.4} />
           </View>
           <Text style={styles.quickCardTitle}>{title}</Text>
           <Text style={styles.quickCardSub}>{subtitle}</Text>
@@ -150,7 +155,7 @@ function QuickCard({
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const HomeScreen: React.FC = () => {
-  const { logout } = useContext(AuthContext);
+  const { signOut } = useAuth();
   const navigation = useNavigation<any>();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>([]);
@@ -212,6 +217,7 @@ const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} />
       {/* ══ HEADER PANEL ══ */}
       <View style={styles.header}>
         {/* Top bar */}
@@ -220,8 +226,8 @@ const HomeScreen: React.FC = () => {
             <View style={styles.led} />
             <Text style={styles.headerEyebrow}>GastroMind</Text>
           </View>
-          <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-            <Text style={styles.logoutIcon}>⎋</Text>
+          <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
+            <LogOut size={13} color={COLORS.error} strokeWidth={2.6} />
             <Text style={styles.logoutText}>Salir</Text>
           </TouchableOpacity>
         </View>
@@ -230,7 +236,7 @@ const HomeScreen: React.FC = () => {
         <View style={styles.greetingRow}>
           <View style={styles.greetingText}>
             <Text style={styles.greetingSub}>{getGreeting()},</Text>
-            <Text style={styles.greetingName}>{firstName}! 👋</Text>
+            <Text style={styles.greetingName}>{firstName}</Text>
           </View>
           <View style={styles.avatarRing}>
             <Avatar name={profile.name} size={56} />
@@ -240,25 +246,25 @@ const HomeScreen: React.FC = () => {
         {/* Stats fila */}
         <View style={styles.statsRow}>
           <StatChip
-            emoji="🧊"
+            icon={Snowflake}
             value={fridgeItems.length}
             label="En nevera"
             color={COLORS.primary}
           />
           <StatChip
-            emoji="⚠️"
+            icon={ShieldAlert}
             value={expiredCount}
             label="Caducados"
             color={COLORS.error}
           />
           <StatChip
-            emoji="🏠"
+            icon={Home}
             value={memberCount}
             label="Personas"
             color={COLORS.accent}
           />
           <StatChip
-            emoji="🍳"
+            icon={UtensilsCrossed}
             value={toolCount}
             label="Utensilios"
             color="#5BBCFF"
@@ -284,7 +290,9 @@ const HomeScreen: React.FC = () => {
               onPress={() => navigation.navigate("Nevera")}
               activeOpacity={0.85}
             >
-              <Text style={styles.alertBannerEmoji}>⚠️</Text>
+              <View style={styles.alertBannerIconWrap}>
+                <ShieldAlert size={18} color={COLORS.error} strokeWidth={2.5} />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.alertBannerTitle}>
                   {expiredCount === 1
@@ -306,14 +314,14 @@ const HomeScreen: React.FC = () => {
 
           <View style={styles.quickGrid}>
             <QuickCard
-              emoji="🧊"
+              icon={Snowflake}
               title="Mi Nevera"
               subtitle={`${freshCount} frescos`}
               accentColor={COLORS.primary}
               onPress={() => navigation.navigate("Nevera")}
             />
             <QuickCard
-              emoji="👤"
+              icon={User}
               title="Mi Perfil"
               subtitle={`${toolCount} utensilios`}
               accentColor="#5BBCFF"
@@ -334,7 +342,8 @@ const HomeScreen: React.FC = () => {
 
             <View style={styles.recipeHeroInner}>
               <View style={styles.recipeHeroBadge}>
-                <Text style={styles.recipeHeroBadgeText}>✨ IA</Text>
+                <Sparkles size={12} color={COLORS.primary} strokeWidth={2.6} />
+                <Text style={styles.recipeHeroBadgeText}>IA</Text>
               </View>
               <Text style={styles.recipeHeroTitle}>Tu próxima creación</Text>
               <Text style={styles.recipeHeroSub}>
@@ -345,7 +354,8 @@ const HomeScreen: React.FC = () => {
                 style={styles.recipeHeroBtn}
                 activeOpacity={0.85}
               >
-                <Text style={styles.recipeHeroBtnText}>🍽️ Generar receta</Text>
+                <ChefHat size={14} color={COLORS.white} strokeWidth={2.6} />
+                <Text style={styles.recipeHeroBtnText}>Generar receta</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -387,7 +397,7 @@ const HomeScreen: React.FC = () => {
               style={styles.householdArrow}
               onPress={() => navigation.navigate("Perfil")}
             >
-              <Text style={styles.householdArrowText}>›</Text>
+              <ChevronRight size={18} color={COLORS.primary} strokeWidth={2.8} />
             </TouchableOpacity>
           </View>
 
@@ -480,7 +490,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.error + "55",
   },
-  logoutIcon: { color: COLORS.error, fontSize: 14 },
   logoutText: { color: COLORS.error, fontWeight: "700", fontSize: 13 },
 
   greetingRow: {
@@ -528,7 +537,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
   },
-  statEmoji: { fontSize: 14, marginBottom: 2 },
+  statIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
   statValue: { fontSize: 17, fontWeight: "900" },
   statLabel: {
     fontSize: 9,
@@ -553,7 +569,16 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.error + "44",
   },
-  alertBannerEmoji: { fontSize: 26 },
+  alertBannerIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLORS.error + "20",
+    borderWidth: 1,
+    borderColor: COLORS.error + "4A",
+  },
   alertBannerTitle: { fontSize: 14, fontWeight: "800", color: COLORS.error },
   alertBannerSub: {
     fontSize: 12,
@@ -640,6 +665,9 @@ const styles = StyleSheet.create({
   },
   recipeHeroInner: { padding: 24 },
   recipeHeroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     alignSelf: "flex-start",
     backgroundColor: COLORS.primary + "30",
     paddingHorizontal: 12,
@@ -670,6 +698,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   recipeHeroBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     alignSelf: "flex-start",
     backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
@@ -722,12 +753,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1.2,
     borderColor: COLORS.primary + "44",
-  },
-  householdArrowText: {
-    color: COLORS.primary,
-    fontSize: 22,
-    fontWeight: "700",
-    lineHeight: 28,
   },
 });
 

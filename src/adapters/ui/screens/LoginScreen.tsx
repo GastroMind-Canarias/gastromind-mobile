@@ -34,7 +34,7 @@ const LoginScreen: React.FC = () => {
     if (!username || !password) return;
 
     try {
-      await signIn({ username, password });
+      await signIn({ username: username.trim(), password });
     } catch (e) {
       console.log("Error de login real:", e);
     }
@@ -42,7 +42,7 @@ const LoginScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#0D1F17" />
 
       <View style={[styles.circle, styles.circle1]} />
       <View style={[styles.circle, styles.circle2]} />

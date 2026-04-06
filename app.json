@@ -12,8 +12,9 @@
       "supportsTablet": true
     },
     "androidNavigationBar": {
-      "visible": "sticky-immersive",
-      "backgroundColor": "#00000000"
+      "visible": "visible",
+      "backgroundColor": "#0D1F17",
+      "barStyle": "light-content"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,9 +23,10 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "package": "com.anonymous.gastromindmobile"
     },
     "web": {
       "output": "static",

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { ArrowLeft, ChefHat, Clock3, Flame, Heart, UtensilsCrossed } from 'lucide-react-native';
 import { AppStackParamList } from '../navigation/types';
 import { COLORS } from '../../../shared/theme/colors';
 
@@ -47,11 +48,11 @@ const RecipeDetailScreen: React.FC = () => {
           {/* OVERLAY & BACK BUTTON */}
           <SafeAreaView edges={['top']} style={styles.backButtonContainer}>
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-              <Text style={styles.backButtonText}>←</Text>
+              <ArrowLeft size={20} color={DARK_GREEN} strokeWidth={2.8} />
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.bookmarkButton}>
-              <Text style={styles.bookmarkIcon}>❤️</Text>
+              <Heart size={18} color={COLORS.error} fill={COLORS.error} strokeWidth={2.2} />
             </TouchableOpacity>
           </SafeAreaView>
           
@@ -73,19 +74,19 @@ const RecipeDetailScreen: React.FC = () => {
           {/* STATS */}
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statEmoji}>⏱️</Text>
+              <Clock3 size={18} color={COLORS.primary} strokeWidth={2.6} />
               <Text style={styles.statValue}>{recipe.prep_time}m</Text>
               <Text style={styles.statLabel}>Preparación</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
-              <Text style={styles.statEmoji}>🔥</Text>
+              <Flame size={18} color={COLORS.accent} strokeWidth={2.6} />
               <Text style={styles.statValue}>{recipe.calories}</Text>
               <Text style={styles.statLabel}>Calorías</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
-              <Text style={styles.statEmoji}>🍽️</Text>
+              <UtensilsCrossed size={18} color={COLORS.text} strokeWidth={2.6} />
               <Text style={styles.statValue}>{recipe.servings}</Text>
               <Text style={styles.statLabel}>Raciones</Text>
             </View>
@@ -93,7 +94,7 @@ const RecipeDetailScreen: React.FC = () => {
 
           <View style={styles.infoPillContainer}>
             <View style={styles.infoPill}>
-              <Text style={styles.infoPillEmoji}>🍳</Text>
+              <ChefHat size={14} color={COLORS.primary} strokeWidth={2.6} />
               <Text style={styles.infoPillText}>Necesitas: <Text style={{ fontWeight: '800' }}>{recipe.appliance_needed}</Text></Text>
             </View>
           </View>
@@ -101,7 +102,8 @@ const RecipeDetailScreen: React.FC = () => {
           {/* INSTRUCTIONS */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>👨‍🍳 Instrucciones</Text>
+              <ChefHat size={14} color={DARK_GREEN} strokeWidth={2.6} />
+              <Text style={styles.sectionTitle}>Instrucciones</Text>
               <View style={styles.sectionLine} />
             </View>
             
@@ -162,19 +164,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     ...SHADOW_SM,
   },
-  backButtonText: {
-    fontSize: 22, color: DARK_GREEN,
-    fontWeight: '700', lineHeight: 28,
-  },
   bookmarkButton: {
     width: 44, height: 44,
     borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.9)',
     justifyContent: 'center', alignItems: 'center',
     ...SHADOW_SM,
-  },
-  bookmarkIcon: {
-    fontSize: 20, lineHeight: 24,
   },
 
   // Content
@@ -224,7 +219,6 @@ const styles = StyleSheet.create({
   statBox: {
     flex: 1, alignItems: 'center',
   },
-  statEmoji: { fontSize: 20, marginBottom: 4 },
   statValue: { fontSize: 16, fontWeight: '900', color: DARK_GREEN },
   statLabel: { fontSize: 11, color: DARK_GREEN, opacity: 0.5, fontWeight: '600', marginTop: 2 },
   statDivider: {
@@ -239,7 +233,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#D7EDE0', paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: 14, borderWidth: 1, borderColor: COLORS.primary + '40',
   },
-  infoPillEmoji: { fontSize: 16 },
   infoPillText: { fontSize: 13, color: DARK_GREEN, opacity: 0.8 },
 
   // Instructions

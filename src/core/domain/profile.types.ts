@@ -25,6 +25,7 @@ export interface HouseholdMember {
 
 export interface UserProfile {
     id: string;
+    householdId: string;
     name: string;
     email: string;
     kitchenTools: KitchenTool[];

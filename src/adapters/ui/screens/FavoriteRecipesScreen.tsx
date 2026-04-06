@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChefHat, Clock3, Flame, Heart } from 'lucide-react-native';
 import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
 
@@ -97,7 +97,7 @@ const RecipeCard: React.FC<{ recipe: Recipe; onPress: () => void }> = ({ recipe,
 
         {/* Decorativo de guardado */}
         <View style={styles.bookmarkBadge}>
-          <Text style={styles.bookmarkIcon}>❤️</Text>
+          <Heart size={16} color={COLORS.error} fill={COLORS.error} strokeWidth={2.3} />
         </View>
 
         {/* Info */}
@@ -109,15 +109,15 @@ const RecipeCard: React.FC<{ recipe: Recipe; onPress: () => void }> = ({ recipe,
 
           <View style={styles.recipeStats}>
             <View style={styles.statItem}>
-              <Text style={styles.statEmoji}>⏱️</Text>
+              <Clock3 size={12} color={DARK_GREEN} strokeWidth={2.4} />
               <Text style={styles.statText}>{recipe.prep_time}m</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statEmoji}>🔥</Text>
+              <Flame size={12} color={COLORS.accent} strokeWidth={2.4} />
               <Text style={styles.statText}>{recipe.calories} kcal</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statEmoji}>🍳</Text>
+              <ChefHat size={12} color={COLORS.primary} strokeWidth={2.4} />
               <Text style={styles.statText}>{recipe.appliance_needed}</Text>
             </View>
           </View>
@@ -268,10 +268,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     ...SHADOW_SM,
   },
-  bookmarkIcon: {
-    fontSize: 18,
-    lineHeight: 22,
-  },
   recipeInfo: {
     padding: 18,
   },
@@ -309,9 +305,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2EFE7',
     gap: 4,
-  },
-  statEmoji: {
-    fontSize: 12,
   },
   statText: {
     fontSize: 12,

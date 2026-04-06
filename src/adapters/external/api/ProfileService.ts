@@ -22,63 +22,115 @@ function decodeJwtPayload(token: string): any {
   }
 }
 
-let cachedUserId: string | null = null;
-let cachedHouseholdId: string | null = null;
+function normalizeIdentity(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
+function toLocalPart(value: string): string {
+  return value.split("@")[0];
+}
+
+function getIdentityCandidates(decoded: any): string[] {
+  const raw = [
+    decoded?.sub,
+    decoded?.email,
+    decoded?.preferred_username,
+    decoded?.username,
+    decoded?.name,
+    decoded?.userId,
+    decoded?.id,
+  ];
+
+  const normalized = raw
+    .map((v) => normalizeIdentity(v))
+    .filter((v): v is string => Boolean(v));
+
+  return Array.from(new Set(normalized));
+}
+
+function getMemberIdentityCandidates(member: any): string[] {
+  const raw = [
+    member?.id,
+    member?.email,
+    member?.username,
+    member?.userName,
+    member?.name,
+    member?.user?.id,
+    member?.user?.email,
+    member?.user?.username,
+    member?.user?.name,
+  ];
+
+  return raw
+    .map((v) => normalizeIdentity(v))
+    .filter((v): v is string => Boolean(v));
+}
+
+function findCurrentMember(members: any[], decoded: any): any | null {
+  const tokenCandidates = getIdentityCandidates(decoded);
+  if (tokenCandidates.length === 0) return null;
+
+  const exact = members.find((member: any) => {
+    const memberCandidates = getMemberIdentityCandidates(member);
+    return tokenCandidates.some((tokenValue) => memberCandidates.includes(tokenValue));
+  });
+  if (exact) return exact;
+
+  const relaxedTokenValues = tokenCandidates.map(toLocalPart);
+  const relaxed = members.find((member: any) => {
+    const memberCandidates = getMemberIdentityCandidates(member).map(toLocalPart);
+    return relaxedTokenValues.some((tokenValue) => memberCandidates.includes(tokenValue));
+  });
+
+  return relaxed ?? null;
+}
+
+/**
+ * Sources all information from /households/me as requested.
+ * Consolidated source of truth for user profile, household members, and appliances.
+ */
 async function getCurrentUser(): Promise<{
   userId: string;
   householdId: string;
   name: string;
   email: string;
+  allergens?: any[];
+  householdData?: any;
 } | null> {
   try {
     const token = await AsyncStorage.getItem("userToken");
     if (!token) return null;
 
-    const payload = decodeJwtPayload(token);
-    if (!payload?.sub) return null;
+    const decoded = decodeJwtPayload(token);
+    if (!decoded) return null;
 
-    const username = payload.sub;
+    // Use /households/me as the primary source
+    const res = await apiClient.get("/households/me");
+    const hData = res.data;
 
-    // Find user by username
-    const usersRes = await apiClient.get("/users");
-    const me = usersRes.data.find(
-      (u: any) => u.name?.toLowerCase() === username.toLowerCase(),
-    );
+    if (!hData || !hData.members) return null;
 
-    if (!me) return null;
-
-    cachedUserId = me.id;
-    cachedHouseholdId = me.houseHold_id ?? null;
+    const me = findCurrentMember(hData.members, decoded);
+    if (!me) {
+      console.error("❌ Could not map JWT to a household member");
+      return null;
+    }
 
     return {
       userId: me.id,
-      householdId: me.houseHold_id ?? "",
-      name: me.name ?? username,
-      email: me.email ?? "",
+      householdId: hData.id,
+      name: me.name || "",
+      email: me.email || "",
+      allergens: me.allergens || [],
+      householdData: hData,
     };
-  } catch (e) {
-    console.error("Error getting current user:", e);
+  } catch (e: any) {
+    console.error("❌ Error fetching /households/me:", e?.message);
     return null;
   }
 }
-
-const ALLERGEN_EMOJIS: Record<string, string> = {
-  GLUTEN: "🌾",
-  LACTOSA: "🥛",
-  FRUTOS_SECOS: "🥜",
-  HUEVO: "🥚",
-  MARISCO: "🦐",
-  PESCADO: "🐟",
-  SOJA: "🫘",
-  CACAHUETE: "🥜",
-  APIO: "🥬",
-  MOSTAZA: "🟡",
-  SESAMO: "🫘",
-  ALTRAMUZ: "🌿",
-  MOLUSCOS: "🐚",
-  SULFITOS: "🍷",
-};
 
 const APPLIANCE_TO_TOOL: Record<string, KitchenTool> = {
   HORNO: KitchenTool.HORNO,
@@ -90,7 +142,6 @@ const APPLIANCE_TO_TOOL: Record<string, KitchenTool> = {
   SARTEN: KitchenTool.SARTEN,
 };
 
-// ─── Backend allergen name → frontend Allergen enum mapping ──────────────────
 const ALLERGEN_NAME_TO_ENUM: Record<string, Allergen> = {
   GLUTEN: Allergen.GLUTEN,
   LACTOSA: Allergen.LACTOSA,
@@ -109,11 +160,12 @@ export interface BackendAllergen {
 // ═══════════════════════════════════════════════════════════════════════════════
 export const profileService = {
   /**
-   * Fetch full profile from the API
+   * Fetch full profile from the API using consolidated /households/me endpoint
    */
   get: async (): Promise<UserProfile> => {
     const empty: UserProfile = {
       id: "",
+      householdId: "",
       name: "",
       email: "",
       kitchenTools: [],
@@ -123,73 +175,55 @@ export const profileService = {
     };
 
     try {
-      const user = await getCurrentUser();
-      if (!user) return empty;
+      const data = await getCurrentUser();
+      if (!data) return empty;
 
       const profile: UserProfile = {
-        id: user.userId,
-        name: user.name,
-        email: user.email,
+        id: data.userId,
+        householdId: data.householdId,
+        name: data.name,
+        email: data.email,
         kitchenTools: [],
         householdMembers: [],
         allergens: [],
         customAllergens: [],
       };
 
-      // Fetch household members & appliances
-      if (user.householdId) {
-        try {
-          const membersRes = await apiClient.get(
-            `/households/${user.householdId}/members`,
-          );
-          profile.householdMembers = membersRes.data.map((m: any) => ({
-            id: m.id,
-            name: m.name,
-          }));
-        } catch (e) {
-          console.warn("Error fetching household members:", e);
-        }
-
-        try {
-          const appliancesRes = await apiClient.get(
-            `/households/${user.householdId}/appliances`,
-          );
-          profile.kitchenTools = appliancesRes.data
-            .map((a: any) => APPLIANCE_TO_TOOL[a.appliance])
-            .filter(Boolean);
-        } catch (e) {
-          console.warn("Error fetching appliances:", e);
-        }
+      // Extract household members
+      if (data.householdData?.members) {
+        profile.householdMembers = data.householdData.members.map((m: any) => ({
+          id: m.id,
+          name: m.name,
+        }));
       }
 
-      // Fetch user allergens
-      try {
-        const allergensRes = await apiClient.get(
-          `/users/${user.userId}/allergens`,
-        );
-        const backendAllergens: BackendAllergen[] = allergensRes.data;
+      // Extract household appliances
+      if (data.householdData?.appliances) {
+        profile.kitchenTools = data.householdData.appliances
+          .map((a: string) => APPLIANCE_TO_TOOL[a.toUpperCase()])
+          .filter(Boolean);
+      }
 
-        for (const ba of backendAllergens) {
-          const enumVal = ALLERGEN_NAME_TO_ENUM[ba.name?.toUpperCase()];
-          if (enumVal) {
-            profile.allergens.push(enumVal);
-          } else {
-            profile.customAllergens.push(ba.name);
-          }
+      // User allergens (found within the member object)
+      const backendAllergens: BackendAllergen[] = data.allergens || [];
+      for (const ba of backendAllergens) {
+        const enumVal = ALLERGEN_NAME_TO_ENUM[ba.name?.toUpperCase()];
+        if (enumVal) {
+          profile.allergens.push(enumVal);
+        } else {
+          profile.customAllergens.push(ba.name);
         }
-      } catch (e) {
-        console.warn("Error fetching user allergens:", e);
       }
 
       return profile;
     } catch (e) {
-      console.error("Error fetching profile:", e);
+      console.error("Error fetching consolidated profile:", e);
       return empty;
     }
   },
 
   /**
-   * Get all available allergens from the backend (for the full list)
+   * Get all available allergens from the backend
    */
   getAllAllergens: async (): Promise<BackendAllergen[]> => {
     try {
@@ -214,17 +248,17 @@ export const profileService = {
     if (!applianceKey) return;
 
     try {
-      // Check if already present
-      const appliancesRes = await apiClient.get(
-        `/households/${user.householdId}/appliances`,
-      );
-      const existing = appliancesRes.data.find(
-        (a: any) => a.appliance === applianceKey,
-      );
+      // Check if already present in household data from the consolidated response
+      const existing = user.householdData?.appliances?.includes(applianceKey);
 
       if (existing) {
-        // Remove
-        await apiClient.delete(`/households/appliances/${existing.id}`);
+        // Find existing record to get its ID (we might still need a secondary call for deletion if ID is required)
+        // For simplicity, we fallback to a fetch if we don't have IDs for devices.
+        const appliancesRes = await apiClient.get(`/households/${user.householdId}/appliances`);
+        const item = appliancesRes.data.find((a: any) => a.appliance === applianceKey);
+        if (item) {
+          await apiClient.delete(`/households/appliances/${item.id}`);
+        }
       } else {
         // Add
         await apiClient.post(
@@ -244,13 +278,8 @@ export const profileService = {
     if (!user) return;
 
     try {
-      // Get user allergens
-      const myAllergensRes = await apiClient.get(
-        `/users/${user.userId}/allergens`,
-      );
-      const myAllergens: BackendAllergen[] = myAllergensRes.data;
-      const exists = myAllergens.find(
-        (a) => a.name?.toUpperCase() === allergenName.toUpperCase(),
+      const exists = user.allergens?.find(
+        (a: any) => a.name?.toUpperCase() === allergenName.toUpperCase(),
       );
 
       if (exists) {
@@ -274,28 +303,25 @@ export const profileService = {
   },
 
   /**
-   * Add a custom allergen (creates in backend then adds to user)
+   * Add a custom allergen
    */
   addCustomAllergen: async (allergenName: string): Promise<void> => {
     const user = await getCurrentUser();
     if (!user) return;
 
     try {
-      // Check if allergen already exists in the system
       const allRes = await apiClient.get("/allergens");
       let allergen = allRes.data.find(
         (a: any) => a.name?.toLowerCase() === allergenName.toLowerCase(),
       );
 
       if (!allergen) {
-        // Create the allergen
         const created = await apiClient.post("/allergens", {
           name: allergenName,
         });
         allergen = created.data;
       }
 
-      // Add to user
       await apiClient.post(`/users/${user.userId}/allergens/${allergen.id}`);
     } catch (e) {
       console.error("Error adding custom allergen:", e);
@@ -306,32 +332,20 @@ export const profileService = {
    * Remove custom allergen from user
    */
   toggleCustomAllergen: async (allergenName: string): Promise<void> => {
-    // Same as toggleAllergen since custom allergens are stored the same way
     await profileService.toggleAllergen(allergenName);
   },
 
-  /**
-   * Get household ID for the current user
-   */
   getHouseholdId: async (): Promise<string | null> => {
     const user = await getCurrentUser();
     return user?.householdId ?? null;
   },
 
-  /**
-   * Get user ID for the current user
-   */
   getUserId: async (): Promise<string | null> => {
     const user = await getCurrentUser();
     return user?.userId ?? null;
   },
 
-  /**
-   * Not used in current API - members are managed via household endpoints
-   */
   addMember: async (_name: string): Promise<void> => {
-    // The backend doesn't support creating users by name directly.
-    // Members are invited via token. This is a placeholder.
     console.warn("addMember: Use household invite flow instead");
   },
 
@@ -340,14 +354,13 @@ export const profileService = {
    */
   removeMember: async (memberId: string): Promise<void> => {
     const user = await getCurrentUser();
-    if (!user?.householdId) return;
+    if (!user) return;
 
     try {
-      await apiClient.delete(
-        `/households/${user.householdId}/members/${memberId}?ownerId=${user.userId}`,
-      );
+      await apiClient.delete(`/households/me/members/${memberId}`);
     } catch (e) {
       console.error("Error removing member:", e);
+      throw e;
     }
   },
 
