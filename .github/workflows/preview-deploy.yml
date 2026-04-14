@@ -28,7 +28,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: 📦 Install dependencies
-        run: npm install
+        run: npm ci
 
       # --environment is required: EAS only injects dashboard variables (e.g. EXPO_PUBLIC_*)
       # into the Metro bundle when this flag matches an environment where those vars exist.
