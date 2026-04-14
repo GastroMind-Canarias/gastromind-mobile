@@ -1,7 +1,7 @@
-import { useNavigation } from '@react-navigation/native';
-import { useFocusEffect } from '@react-navigation/native';
-import { AppNavigationProp } from '../navigation/types';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { pushRecipeDetail } from '../navigation/routes';
+import { favoriteService, UserFavorite } from '../../external/api/FavoriteService';
 import {
   ActivityIndicator,
   Alert,
@@ -18,10 +18,9 @@ import {
   View,
 } from 'react-native';
 import { ChefHat, Clock3, Flame, Heart, RefreshCw, Trash2 } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
-import { favoriteService, UserFavorite } from '../../external/api/FavoriteService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = '#0D1F17';
@@ -88,7 +87,6 @@ const RecipeCard: React.FC<{
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const FavoriteRecipesScreen: React.FC = () => {
-  const navigation = useNavigation<AppNavigationProp>();
   const insets = useSafeAreaInsets();
   const [favorites, setFavorites] = useState<UserFavorite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -236,14 +234,12 @@ const FavoriteRecipesScreen: React.FC = () => {
                 </Text>
               </View>
             ) : (
-              sortedFavorites.map((favorite) => (
+              sortedFavorites.map((fav) => (
                 <RecipeCard
-                  key={favorite.id}
-                  favorite={favorite}
-                  onPress={() => {
-                    navigation.navigate('RecipeDetail', { recipe: favorite.recipe as Recipe });
-                  }}
-                  onRemove={() => handleDeleteFavorite(favorite.id, favorite.recipe.title)}
+                  key={fav.id}
+                  favorite={fav}
+                  onPress={() => pushRecipeDetail(fav.recipe as Recipe)}
+                  onRemove={() => handleDeleteFavorite(fav.id, fav.recipe.title)}
                 />
               ))
             )}

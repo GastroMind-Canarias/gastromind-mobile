@@ -1,31 +1,49 @@
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, Refrigerator, UserCircle2, Heart } from 'lucide-react-native';
+import { COLORS } from '@/src/shared/theme/colors';
+import { Tabs } from 'expo-router';
+import { Heart, Home, Refrigerator, UserCircle2 } from 'lucide-react-native';
 import React from 'react';
 import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../../../shared/theme/colors';
-import FridgeScreen from '../screens/FridgeScreen';
-import HomeScreen from '../screens/HomeScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import FavoriteRecipesScreen from '../screens/FavoriteRecipesScreen';
 
-const Tab = createBottomTabNavigator();
+function TabIcon({ focused, children }: { focused: boolean; children: React.ReactNode }) {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      {children}
+      {focused && (
+        <View
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: 3,
+            backgroundColor: COLORS.primary,
+            marginTop: 3,
+          }}
+        />
+      )}
+    </View>
+  );
+}
 
-export const MainNavigator = () => {
+/** Altura útil icono + label; el padding superior/inferior y insets.bottom suman al alto total. */
+const TAB_BAR_CONTENT = 52;
+
+export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 10 : 8);
+  const tabPaddingTop = 8;
+  const tabPaddingBottom = 8 + insets.bottom;
+  const tabBarHeight = tabPaddingTop + TAB_BAR_CONTENT + tabPaddingBottom;
 
   return (
-    <Tab.Navigator
+    <Tabs
       screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: '#8AA898',
         tabBarStyle: {
-          height: 56 + bottomInset,
-          paddingBottom: bottomInset,
-          paddingTop: 8,
+          height: tabBarHeight,
+          paddingBottom: tabPaddingBottom,
+          paddingTop: tabPaddingTop,
           borderTopLeftRadius: 28,
           borderTopRightRadius: 28,
           position: 'absolute',
@@ -49,10 +67,10 @@ export const MainNavigator = () => {
         tabBarIconStyle: { marginBottom: -2 },
       }}
     >
-      <Tab.Screen
-        name="Inicio"
-        component={HomeScreen}
+      <Tabs.Screen
+        name="index"
         options={{
+          title: 'Inicio',
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon focused={focused}>
               <Home size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
@@ -60,10 +78,10 @@ export const MainNavigator = () => {
           ),
         }}
       />
-      <Tab.Screen
-        name="Nevera"
-        component={FridgeScreen}
+      <Tabs.Screen
+        name="fridge"
         options={{
+          title: 'Nevera',
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon focused={focused}>
               <Refrigerator size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
@@ -71,10 +89,10 @@ export const MainNavigator = () => {
           ),
         }}
       />
-      <Tab.Screen
-        name="Favoritos"
-        component={FavoriteRecipesScreen}
+      <Tabs.Screen
+        name="favorites"
         options={{
+          title: 'Favoritos',
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon focused={focused}>
               <Heart size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
@@ -82,10 +100,10 @@ export const MainNavigator = () => {
           ),
         }}
       />
-      <Tab.Screen
-        name="Perfil"
-        component={ProfileScreen}
+      <Tabs.Screen
+        name="profile"
         options={{
+          title: 'Perfil',
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon focused={focused}>
               <UserCircle2 size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
@@ -93,24 +111,6 @@ export const MainNavigator = () => {
           ),
         }}
       />
-    </Tab.Navigator>
-  );
-};
-
-// Punto de acento verde bajo el icono activo
-function TabIcon({ focused, children }: { focused: boolean; children: React.ReactNode }) {
-  return (
-    <View style={{ alignItems: 'center' }}>
-      {children}
-      {focused && (
-        <View
-          style={{
-            width: 5, height: 5, borderRadius: 3,
-            backgroundColor: COLORS.primary,
-            marginTop: 3,
-          }}
-        />
-      )}
-    </View>
+    </Tabs>
   );
 }

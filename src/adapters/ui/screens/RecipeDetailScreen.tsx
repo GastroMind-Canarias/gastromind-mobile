@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import {
   Alert,
   Animated,
@@ -12,23 +12,28 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ChefHat, Clock3, Flame, Heart, UtensilsCrossed } from 'lucide-react-native';
-import { AppStackParamList } from '../navigation/types';
+import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
 import { favoriteService } from '../../external/api/FavoriteService';
 
 // ─── Constantes de tema ─────────────────────
 const DARK_GREEN = '#0D1F17';
-const MID_GREEN = '#1A3826';
-const ICE = '#C8F0DC';
-
-type RecipeDetailRouteProp = RouteProp<AppStackParamList, 'RecipeDetail'>;
 
 const RecipeDetailScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const route = useRoute<RecipeDetailRouteProp>();
-  const { recipe } = route.params;
+  const router = useRouter();
+  const { recipe: recipeParam } = useLocalSearchParams<{ recipe: string }>();
+
+  const recipe = useMemo((): Recipe | null => {
+    const raw = Array.isArray(recipeParam) ? recipeParam[0] : recipeParam;
+    if (!raw || typeof raw !== 'string') return null;
+    try {
+      return JSON.parse(raw) as Recipe;
+    } catch {
+      return null;
+    }
+  }, [recipeParam]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -37,6 +42,7 @@ const RecipeDetailScreen: React.FC = () => {
   const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const syncFavoriteState = useCallback(async () => {
+    if (!recipe) return;
     try {
       const favorite = await favoriteService.findMineByRecipeId(recipe.id);
       setIsFavorite(Boolean(favorite));
@@ -45,7 +51,7 @@ const RecipeDetailScreen: React.FC = () => {
       setIsFavorite(false);
       setFavoriteId(null);
     }
-  }, [recipe.id]);
+  }, [recipe]);
 
   useEffect(() => {
     syncFavoriteState();
@@ -61,11 +67,11 @@ const RecipeDetailScreen: React.FC = () => {
 
     setFavoriteLoading(true);
     try {
-      if (isFavorite && favoriteId) {
+    if (isFavorite && favoriteId) {
         await favoriteService.deleteMine(favoriteId);
         setIsFavorite(false);
         setFavoriteId(null);
-      } else {
+      } else if (recipe) {
         const created = await favoriteService.addMineByRecipeId(recipe.id);
         if (created) {
           setIsFavorite(true);
@@ -85,6 +91,16 @@ const RecipeDetailScreen: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (recipeParam != null && recipe === null) {
+      router.back();
+    }
+  }, [recipe, recipeParam, router]);
+
+  if (!recipe) {
+    return null;
+  }
+
   return (
     <View style={styles.root}>
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
@@ -94,7 +110,7 @@ const RecipeDetailScreen: React.FC = () => {
           
           {/* OVERLAY & BACK BUTTON */}
           <SafeAreaView edges={['top']} style={styles.backButtonContainer}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
               <ArrowLeft size={20} color={DARK_GREEN} strokeWidth={2.8} />
             </TouchableOpacity>
             

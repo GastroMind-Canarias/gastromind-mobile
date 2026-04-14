@@ -1,5 +1,6 @@
-import { useNavigation } from '@react-navigation/native';
 import { Airplay, ArrowLeft, ArrowRight, Check, ChefHat, CookingPot, Cpu, Flame, House, Link2, Lock, Mail, Microwave, RotateCw, ShieldAlert, Sparkles, User, Users, UtensilsCrossed, Wheat, Wind, Zap, type LucideIcon } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { ROUTES } from '../navigation/routes';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -23,7 +24,6 @@ import { apiClient } from '../../external/api/apiClient';
 import { CustomButton } from '../components/CustomButton';
 import { CustomInput } from '../components/CustomInput';
 import { useAuth } from '../hooks/useAuth';
-import { AuthNavigationProp } from '../navigation/types';
 
 const { width } = Dimensions.get('window');
 const TOTAL_STEPS = 4;
@@ -167,7 +167,6 @@ function ToggleChip({
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 const RegisterScreen: React.FC = () => {
-  const navigation = useNavigation<AuthNavigationProp>();
   const { signUp, signIn, loading: authLoading, error: apiError } = useAuth();
 
   // ── Step 0 – account
@@ -282,7 +281,8 @@ const RegisterScreen: React.FC = () => {
   const handleBack = () => {
     setLocalError(null);
     if (step === 0) {
-      navigation.goBack();
+      if (router.canGoBack()) router.back();
+      else router.replace(ROUTES.authLogin);
     } else {
       animateTransition(-1, () => setStep(s => s - 1));
     }
@@ -678,7 +678,7 @@ const RegisterScreen: React.FC = () => {
               <View style={styles.footer}>
                 <Text style={styles.footerText}>¿Ya tienes una cuenta? </Text>
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('Login')}
+                  onPress={() => router.replace(ROUTES.authLogin)}
                   accessible
                   accessibilityRole="link"
                   accessibilityLabel="Ir a iniciar sesión"

@@ -313,8 +313,8 @@ function AllergenPillBackend({
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
-  const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
+  const { signOut } = useAuth();
 
   const [profile, setProfile] = useState<UserProfile>({
     id: "",
@@ -1295,7 +1295,6 @@ const styles = StyleSheet.create({
   profileHeader: {
     backgroundColor: DARK_GREEN,
     paddingHorizontal: 22,
-    paddingTop: Platform.OS === "ios" ? 58 : 44,
     paddingBottom: 16,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
