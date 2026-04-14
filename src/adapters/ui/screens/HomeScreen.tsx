@@ -29,6 +29,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FridgeItem, ItemStatus } from "../../../core/domain/fridgeItem.types";
 import { COLORS } from "../../../shared/theme/colors";
+import { useTheme } from "../../../shared/theme/ThemeProvider";
 import { fridgeService } from "../../external/api/FridgeService";
 import { profileService } from "../../external/api/ProfileService";
 import { UserProfile } from "../../../core/domain/profile.types";
@@ -102,12 +103,14 @@ function QuickCard({
   title,
   subtitle,
   accentColor,
+  isDark,
   onPress,
 }: {
   icon: LucideIcon;
   title: string;
   subtitle: string;
   accentColor: string;
+  isDark: boolean;
   onPress?: () => void;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -127,7 +130,13 @@ function QuickCard({
     }).start();
 
   return (
-    <Animated.View style={[styles.quickCard, { transform: [{ scale }] }]}>
+    <Animated.View
+      style={[
+        styles.quickCard,
+        isDark && { backgroundColor: "#11351A", borderWidth: 1, borderColor: COLORS.secondary + "44" },
+        { transform: [{ scale }] },
+      ]}
+    >
       <TouchableOpacity
         onPress={onPress}
         onPressIn={pressIn}
@@ -147,8 +156,15 @@ function QuickCard({
           >
             <Icon size={20} color={accentColor} strokeWidth={2.4} />
           </View>
-          <Text style={styles.quickCardTitle}>{title}</Text>
-          <Text style={styles.quickCardSub}>{subtitle}</Text>
+          <Text style={[styles.quickCardTitle, { color: isDark ? COLORS.white : DARK_GREEN }]}>{title}</Text>
+          <Text
+            style={[
+              styles.quickCardSub,
+              { color: isDark ? COLORS.white : DARK_GREEN, opacity: isDark ? 0.72 : 0.45 },
+            ]}
+          >
+            {subtitle}
+          </Text>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -159,11 +175,13 @@ function QuickCard({
 const HEADER_TOP_GAP = 12;
 
 const HomeScreen: React.FC = () => {
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
@@ -171,11 +189,23 @@ const HomeScreen: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoadingProfile(true);
-      const items = await fridgeService.getAll();
-      const p = await profileService.get();
-      setFridgeItems(items);
-      setProfile(p);
-      setLoadingProfile(false);
+      setLoadError(null);
+      try {
+        const [items, p] = await Promise.all([
+          fridgeService.getAll(),
+          profileService.get(),
+        ]);
+        setFridgeItems(items);
+        setProfile(p);
+      } catch (e: any) {
+        const message =
+          e?.response?.data?.message ||
+          e?.message ||
+          "No pudimos cargar el inicio.";
+        setLoadError(message);
+      } finally {
+        setLoadingProfile(false);
+      }
     };
     fetchData();
 
@@ -218,13 +248,13 @@ const HomeScreen: React.FC = () => {
   const memberCount = profile.householdMembers.length;
   const toolCount = profile.kitchenTools.length;
 
-  const firstName = profile.name.split(" ")[0];
+  const firstName = (profile.name || "Chef").split(" ")[0] || "Chef";
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, isDark && { backgroundColor: "#0C100D" }]}>
       <StatusBar
-        barStyle="light-content"
-        backgroundColor={DARK_GREEN}
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={isDark ? "#0C100D" : DARK_GREEN}
         translucent={false}
       />
       {/* ══ HEADER PANEL ══ */}
@@ -289,6 +319,7 @@ const HomeScreen: React.FC = () => {
         ]}
       >
         <ScrollView
+          key={isDark ? "home-dark" : "home-light"}
           contentContainerStyle={[
             styles.scroll,
             { paddingBottom: insets.bottom + 100 },
@@ -298,7 +329,10 @@ const HomeScreen: React.FC = () => {
           {/* Alerta caducados */}
           {expiredCount > 0 && (
             <TouchableOpacity
-              style={styles.alertBanner}
+              style={[
+                styles.alertBanner,
+                isDark && { backgroundColor: COLORS.error + "20", borderColor: COLORS.error + "66" },
+              ]}
               onPress={() => router.push(ROUTES.appTabFridge)}
               activeOpacity={0.85}
             >
@@ -306,22 +340,34 @@ const HomeScreen: React.FC = () => {
                 <ShieldAlert size={18} color={COLORS.error} strokeWidth={2.5} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.alertBannerTitle}>
+                <Text style={[styles.alertBannerTitle, isDark && { color: "#FFD6D6" }]}>
                   {expiredCount === 1
                     ? "1 producto caducado en tu nevera"
                     : `${expiredCount} productos caducados en tu nevera`}
                 </Text>
-                <Text style={styles.alertBannerSub}>
+                <Text style={[styles.alertBannerSub, isDark && { color: "#FFD6D6", opacity: 0.82 }]}>
                   Toca para revisar tu nevera →
                 </Text>
               </View>
             </TouchableOpacity>
           )}
 
+          {loadError ? (
+            <View style={[styles.alertBanner, { marginBottom: 14 }]}> 
+              <View style={styles.alertBannerIconWrap}>
+                <ShieldAlert size={18} color={COLORS.error} strokeWidth={2.5} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.alertBannerTitle}>No se pudo actualizar inicio</Text>
+                <Text style={styles.alertBannerSub}>{loadError}</Text>
+              </View>
+            </View>
+          ) : null}
+
           {/* ── Accesos rápidos ── */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Accesos rápidos</Text>
-            <View style={styles.sectionLine} />
+            <Text style={[styles.sectionTitle, { color: isDark ? COLORS.white : DARK_GREEN, opacity: isDark ? 0.8 : 0.5 }]}>Accesos rápidos</Text>
+            <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + "26" }]} />
           </View>
 
           <View style={styles.quickGrid}>
@@ -330,6 +376,7 @@ const HomeScreen: React.FC = () => {
               title="Mi Nevera"
               subtitle={`${freshCount} frescos`}
               accentColor={COLORS.primary}
+              isDark={isDark}
               onPress={() => router.push(ROUTES.appTabFridge)}
             />
             <QuickCard
@@ -337,17 +384,18 @@ const HomeScreen: React.FC = () => {
               title="Mi Perfil"
               subtitle={`${toolCount} utensilios`}
               accentColor="#5BBCFF"
+              isDark={isDark}
               onPress={() => router.push(ROUTES.appTabProfile)}
             />
           </View>
 
           {/* ── Recetas IA ── */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recetas con IA</Text>
-            <View style={styles.sectionLine} />
+            <Text style={[styles.sectionTitle, { color: isDark ? COLORS.white : DARK_GREEN, opacity: isDark ? 0.8 : 0.5 }]}>Recetas con IA</Text>
+            <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + "26" }]} />
           </View>
 
-          <View style={styles.recipeHero}>
+          <View style={[styles.recipeHero, isDark && { borderWidth: 1, borderColor: COLORS.secondary + "4D" }]}>
             {/* Decoraciones */}
             <View style={styles.recipeHeroDeco1} />
             <View style={styles.recipeHeroDeco2} />
@@ -357,29 +405,29 @@ const HomeScreen: React.FC = () => {
                 <Sparkles size={12} color={COLORS.primary} strokeWidth={2.6} />
                 <Text style={styles.recipeHeroBadgeText}>IA</Text>
               </View>
-              <Text style={styles.recipeHeroTitle}>Tu próxima creación</Text>
-              <Text style={styles.recipeHeroSub}>
+              <Text style={[styles.recipeHeroTitle, { color: isDark ? COLORS.white : COLORS.white }]}>Tu próxima creación</Text>
+              <Text style={[styles.recipeHeroSub, { color: isDark ? COLORS.white : ICE, opacity: isDark ? 0.78 : 0.65 }]}>
                 GastroMind analizará tu nevera y tus utensilios para generar
                 recetas personalizadas solo para ti.
               </Text>
               <TouchableOpacity
                 style={styles.recipeHeroBtn}
                 activeOpacity={0.85}
-                onPress={() => router.push("/(app)/ai-chat" as any)}
+                onPress={() => router.push(ROUTES.aiChat)}
               >
                 <ChefHat size={14} color={COLORS.white} strokeWidth={2.6} />
-                <Text style={styles.recipeHeroBtnText}>Generar receta</Text>
+                <Text style={[styles.recipeHeroBtnText, { color: COLORS.white }]}>Generar receta</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* ── Miembros del hogar ── */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Hogar</Text>
-            <View style={styles.sectionLine} />
+            <Text style={[styles.sectionTitle, { color: isDark ? COLORS.white : DARK_GREEN, opacity: isDark ? 0.8 : 0.5 }]}>Hogar</Text>
+            <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + "26" }]} />
           </View>
 
-          <View style={styles.householdCard}>
+          <View style={[styles.householdCard, isDark && { backgroundColor: "#11351A", borderWidth: 1, borderColor: COLORS.secondary + "44" }]}> 
             <View style={styles.householdAvatars}>
               {profile.householdMembers.map((m, i) => (
                 <View
@@ -397,10 +445,17 @@ const HomeScreen: React.FC = () => {
               ))}
             </View>
             <View style={styles.householdInfo}>
-              <Text style={styles.householdNames}>
-                {profile.householdMembers.map((m) => m.name).join(", ")}
+              <Text style={[styles.householdNames, { color: isDark ? COLORS.white : DARK_GREEN }]}>
+                {profile.householdMembers.length
+                  ? profile.householdMembers.map((m) => m.name).join(", ")
+                  : "Sin miembros cargados"}
               </Text>
-              <Text style={styles.householdSub}>
+              <Text
+                style={[
+                  styles.householdSub,
+                  { color: isDark ? COLORS.white : DARK_GREEN, opacity: isDark ? 0.72 : 0.45 },
+                ]}
+              >
                 {memberCount === 1
                   ? "1 persona en el hogar"
                   : `${memberCount} personas en el hogar`}

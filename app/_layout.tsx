@@ -1,17 +1,21 @@
 import 'react-native-gesture-handler';
 
-import { COLORS } from '@/src/shared/theme/colors';
+import { AppThemeProvider, useTheme } from '@/src/shared/theme/ThemeProvider';
+import { NetworkProvider, useNetwork } from '@/src/shared/network/NetworkProvider';
 import { setupInterceptors } from '@/src/adapters/external/api/authInterceptor';
 import { AuthContext } from '@/src/adapters/ui/navigation/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ROUTES } from '@/src/adapters/ui/navigation/routes';
+import * as NavigationBar from 'expo-navigation-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const { isOnline } = useNetwork();
   const router = useRouter();
   const segments = useSegments();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -57,28 +61,59 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const inApp = segment0 === '(app)';
     const atIndex = segment0 === 'index' || segs.length === 0;
 
+    const redirectToLoginWithAuthError = async () => {
+      let reason = 'not-logged-in';
+      try {
+        const storedReason = await AsyncStorage.getItem('authRedirectReason');
+        if (storedReason === 'user-error') {
+          reason = 'user-error';
+        }
+        await AsyncStorage.removeItem('authRedirectReason');
+      } catch {
+      }
+
+      router.replace({
+        pathname: ROUTES.authLogin,
+        params: { reason },
+      } as never);
+    };
+
     if (!isLoggedIn) {
       if (inApp) {
-        router.replace(ROUTES.authLogin);
+        redirectToLoginWithAuthError();
       } else if (atIndex) {
-        router.replace(ROUTES.authLogin);
+        redirectToLoginWithAuthError();
       }
       return;
     }
 
     if (isLoggedIn) {
+      const inFavoritesTab = segs[0] === '(app)' && segs[1] === '(tabs)' && segs[2] === 'favorites';
+
+      if (!isOnline && !inFavoritesTab) {
+        router.replace('/(app)/(tabs)/favorites');
+        return;
+      }
+
       if (inAuth) {
         router.replace(ROUTES.appTabs);
       } else if (atIndex) {
         router.replace(ROUTES.appTabs);
       }
     }
-  }, [isLoading, isLoggedIn, router, segments]);
+  }, [isLoading, isLoggedIn, isOnline, router, segments]);
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -92,8 +127,34 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   return (
+    <AppThemeProvider>
+      <NetworkProvider>
+        <RootLayoutContent />
+      </NetworkProvider>
+    </AppThemeProvider>
+  );
+}
+
+function RootLayoutContent() {
+  const { isDark, colors } = useTheme();
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const applySystemBarTheme = async () => {
+      try {
+        await NavigationBar.setBackgroundColorAsync(isDark ? colors.background : colors.surface);
+        await NavigationBar.setButtonStyleAsync(isDark ? 'light' : 'dark');
+      } catch {
+      }
+    };
+
+    applySystemBarTheme();
+  }, [colors.background, colors.surface, isDark]);
+
+  return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <AuthGate>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
@@ -105,11 +166,3 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-  },
-});

@@ -18,9 +18,11 @@ import {
   House,
   LogOut,
   Microwave,
+  Moon,
   Plus,
   ShieldAlert,
   Sparkles,
+  Sun,
   User,
   UserRoundMinus,
   UtensilsCrossed,
@@ -35,6 +37,7 @@ import {
   UserProfile,
 } from "../../../core/domain/profile.types";
 import { COLORS } from "../../../shared/theme/colors";
+import { useTheme } from "../../../shared/theme/ThemeProvider";
 import {
   BackendAllergen,
   profileService,
@@ -150,11 +153,13 @@ function ToolPill({
   active,
   onPress,
   isEditing,
+  isDarkMode,
 }: {
   tool: KitchenTool;
   active: boolean;
   onPress?: () => void;
   isEditing: boolean;
+  isDarkMode: boolean;
 }) {
   const cfg = TOOL_CONFIG[tool];
   const Icon = cfg.icon;
@@ -189,8 +194,10 @@ function ToolPill({
           active
             ? { backgroundColor: COLORS.primary, borderColor: COLORS.primary }
             : {
-                backgroundColor: COLORS.white,
-                borderColor: COLORS.text + "18",
+                backgroundColor: isDarkMode ? "#1A2E1F" : COLORS.white,
+                borderColor: isDarkMode
+                  ? COLORS.secondary + "70"
+                  : COLORS.text + "18",
               },
           !isEditing && styles.toolPillDisabled,
         ]}
@@ -212,7 +219,7 @@ function ToolPill({
         <Text
           style={[
             styles.toolLabel,
-            { color: active ? COLORS.white : COLORS.text },
+            { color: active ? COLORS.white : isDarkMode ? COLORS.white : COLORS.text },
           ]}
         >
           {cfg.label}
@@ -230,11 +237,13 @@ function AllergenPillBackend({
   active,
   onPress,
   isEditing,
+  isDarkMode,
 }: {
   allergen: BackendAllergen;
   active: boolean;
   onPress?: () => void;
   isEditing: boolean;
+  isDarkMode: boolean;
 }) {
   const Icon = getAllergenIcon(allergen.name);
   const scale = useRef(new Animated.Value(1)).current;
@@ -268,8 +277,10 @@ function AllergenPillBackend({
           active
             ? { backgroundColor: COLORS.error, borderColor: COLORS.error }
             : {
-                backgroundColor: COLORS.white,
-                borderColor: COLORS.text + "18",
+                backgroundColor: isDarkMode ? "#1A2E1F" : COLORS.white,
+                borderColor: isDarkMode
+                  ? COLORS.secondary + "70"
+                  : COLORS.text + "18",
               },
           !isEditing && styles.toolPillDisabled,
         ]}
@@ -300,7 +311,7 @@ function AllergenPillBackend({
         <Text
           style={[
             styles.toolLabel,
-            { color: active ? COLORS.white : COLORS.text },
+            { color: active ? COLORS.white : isDarkMode ? COLORS.white : COLORS.text },
           ]}
         >
           {allergen.name}
@@ -315,6 +326,8 @@ function AllergenPillBackend({
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
+  const { mode, toggleMode } = useTheme();
+  const isDarkMode = mode === "dark";
 
   const [profile, setProfile] = useState<UserProfile>({
     id: "",
@@ -646,10 +659,15 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: isDarkMode ? "#0C100D" : COLORS.background },
+      ]}
+    >
       <StatusBar
-        barStyle="light-content"
-        backgroundColor={DARK_GREEN}
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor={isDarkMode ? "#0C100D" : DARK_GREEN}
         translucent={false}
       />
       <ScrollView
@@ -705,23 +723,23 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.identityPanel}>
-          <View style={styles.identityPanelGlow} />
+        <View style={[styles.identityPanel, isDarkMode && styles.identityPanelDark]}>
+          <View style={[styles.identityPanelGlow, isDarkMode && styles.identityPanelGlowDark]} />
           <View style={styles.profileInfo}>
             <View style={styles.avatarRing}>
               <Avatar name={profile.name || "?"} size={72} />
             </View>
             <View style={styles.identityTextBlock}>
-              <Text style={styles.profileNameDark}>{profile.name}</Text>
-              <Text style={styles.profileEmailDark}>{profile.email}</Text>
+              <Text style={[styles.profileNameDark, isDarkMode && styles.profileNameDarkMode]}>{profile.name}</Text>
+              <Text style={[styles.profileEmailDark, isDarkMode && styles.profileEmailDarkMode]}>{profile.email}</Text>
               <View style={styles.identityMetaRow}>
-                <View style={styles.metaPill}>
+                <View style={[styles.metaPill, isDarkMode && styles.metaPillDark]}>
                   <Sparkles size={11} color={COLORS.primary} strokeWidth={2.6} />
-                  <Text style={styles.metaPillText}>Cuenta activa</Text>
+                  <Text style={[styles.metaPillText, isDarkMode && styles.metaPillTextDark]}>Cuenta activa</Text>
                 </View>
-                <View style={styles.metaPill}>
+                <View style={[styles.metaPill, isDarkMode && styles.metaPillDark]}>
                   <ShieldAlert size={11} color={COLORS.error} strokeWidth={2.8} />
-                  <Text style={styles.metaPillText}>Privacidad</Text>
+                  <Text style={[styles.metaPillText, isDarkMode && styles.metaPillTextDark]}>Privacidad</Text>
                 </View>
               </View>
             </View>
@@ -773,20 +791,41 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity
+          onPress={toggleMode}
+          style={[
+            styles.themeToggleBtn,
+            isDarkMode && styles.themeToggleBtnDark,
+          ]}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: isDarkMode }}
+          accessibilityLabel="Cambiar modo oscuro"
+          accessibilityHint="Activa o desactiva la paleta oscura de la app"
+        >
+          {isDarkMode ? (
+            <Moon size={16} color={COLORS.white} strokeWidth={2.8} />
+          ) : (
+            <Sun size={16} color={COLORS.forest} strokeWidth={2.8} />
+          )}
+          <Text style={[styles.themeToggleText, isDarkMode && styles.themeToggleTextDark]}>
+            {isDarkMode ? "Modo oscuro activado" : "Cambiar a modo oscuro"}
+          </Text>
+        </TouchableOpacity>
+
         <View style={[styles.editHintCard, isEditing && styles.editHintCardActive]}>
           <Text style={[styles.editHintText, isEditing && styles.editHintTextActive]}>
             {editHelperText}
           </Text>
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.section, isDarkMode && styles.sectionDark]}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleWrap}>
+            <View style={[styles.sectionTitleWrap, isDarkMode && styles.sectionTitleWrapDark]}>
               <House size={17} color={COLORS.primary} strokeWidth={2.4} />
-              <Text style={styles.sectionTitle}>Mi hogar</Text>
+              <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Mi hogar</Text>
             </View>
           </View>
-          <Text style={styles.sectionSub}>
+          <Text style={[styles.sectionSub, isDarkMode && styles.sectionSubDark]}>
             {profile.householdMembers.length === 0
               ? "No hay miembros en el hogar"
               : profile.householdMembers.length === 1
@@ -799,24 +838,25 @@ export default function ProfileScreen() {
               <View style={styles.emptyMembersIconWrap}>
                 <House size={24} color={COLORS.primary} strokeWidth={2.4} />
               </View>
-              <Text style={styles.emptyMembersText}>
+              <Text style={[styles.emptyMembersText, isDarkMode && styles.emptyMembersTextDark]}>
                 Aún no hay nadie en el hogar
               </Text>
             </View>
           ) : (
-            <View style={styles.memberList}>
+            <View style={[styles.memberList, isDarkMode && styles.memberListDark]}>
               {profile.householdMembers.map((member, idx) => (
                 <View
                   key={member.id}
                   style={[
                     styles.memberRow,
+                    isDarkMode && styles.memberRowDark,
                     idx === 0 ? ({ borderTopWidth: 0 } as any) : {},
                   ]}
                 >
                   <Avatar name={member.name} size={42} />
                   <View style={styles.memberInfo}>
-                    <Text style={styles.memberName}>{member.name}</Text>
-                    <Text style={styles.memberRole}>
+                    <Text style={[styles.memberName, isDarkMode && styles.memberNameDark]}>{member.name}</Text>
+                    <Text style={[styles.memberRole, isDarkMode && styles.memberRoleDark]}>
                       {idx === 0 ? "Administrador" : "Miembro"}
                     </Text>
                   </View>
@@ -846,11 +886,11 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.section, isDarkMode && styles.sectionDark]}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleWrap}>
+            <View style={[styles.sectionTitleWrap, isDarkMode && styles.sectionTitleWrapDark]}>
               <UtensilsCrossed size={17} color={COLORS.primary} strokeWidth={2.4} />
-              <Text style={styles.sectionTitle}>Utensilios de cocina</Text>
+              <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Utensilios de cocina</Text>
             </View>
             <View style={styles.sectionBadge}>
               <Text style={styles.sectionBadgeText}>
@@ -858,7 +898,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
-          <Text style={styles.sectionSub}>
+          <Text style={[styles.sectionSub, isDarkMode && styles.sectionSubDark]}>
             Selecciona los que tienes disponibles. Se usarán para personalizar
             tus recetas.
           </Text>
@@ -871,16 +911,17 @@ export default function ProfileScreen() {
                 active={profile.kitchenTools.includes(tool)}
                 onPress={isEditing ? () => handleToggleTool(tool) : undefined}
                 isEditing={isEditing}
+                isDarkMode={isDarkMode}
               />
             ))}
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.section, isDarkMode && styles.sectionDark]}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleWrap}>
+            <View style={[styles.sectionTitleWrap, isDarkMode && styles.sectionTitleWrapDark]}>
               <ShieldAlert size={17} color={COLORS.error} strokeWidth={2.4} />
-              <Text style={styles.sectionTitle}>Alergias e intolerancias</Text>
+              <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Alergias e intolerancias</Text>
             </View>
             <View
               style={[
@@ -896,7 +937,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
-          <Text style={styles.sectionSub}>
+          <Text style={[styles.sectionSub, isDarkMode && styles.sectionSubDark]}>
             Marca los ingredientes que debes evitar.
           </Text>
 
@@ -912,6 +953,7 @@ export default function ProfileScreen() {
                    isEditing ? () => handleToggleAllergen(allergen) : undefined
                 }
                 isEditing={isEditing}
+                isDarkMode={isDarkMode}
               />
             ))}
 
@@ -920,8 +962,10 @@ export default function ProfileScreen() {
                 style={[
                   styles.toolPill,
                   {
-                    backgroundColor: COLORS.white,
-                    borderColor: COLORS.text + "25",
+                    backgroundColor: isDarkMode ? "#1A2E1F" : COLORS.white,
+                    borderColor: isDarkMode
+                      ? COLORS.secondary + "70"
+                      : COLORS.text + "25",
                     borderStyle: "dashed",
                     borderWidth: 1,
                   },
@@ -931,9 +975,9 @@ export default function ProfileScreen() {
                 accessibilityLabel="Anadir otro alergeno"
               >
                 <View style={styles.toolIconWrap}>
-                  <Plus size={14} color={COLORS.text} strokeWidth={2.8} />
+                  <Plus size={14} color={isDarkMode ? COLORS.white : COLORS.text} strokeWidth={2.8} />
                 </View>
-                <Text style={[styles.toolLabel, { color: COLORS.text }]}> 
+                <Text style={[styles.toolLabel, { color: isDarkMode ? COLORS.white : COLORS.text }]}> 
                   Otro...
                 </Text>
               </TouchableOpacity>
@@ -952,13 +996,13 @@ export default function ProfileScreen() {
         icon={ShieldAlert}
         iconColor={COLORS.error}
       >
-        <Text style={styles.fieldLabel}>Nombre del ingrediente</Text>
+        <Text style={[styles.fieldLabel, isDarkMode && { color: COLORS.white, opacity: 0.82 }]}>Nombre del ingrediente</Text>
         <TextInput
-          style={styles.fieldInput}
+          style={[styles.fieldInput, isDarkMode && { color: COLORS.white, backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}
           value={newAllergenName}
           onChangeText={setNewAllergenName}
           placeholder="Ej. Cacahuete"
-          placeholderTextColor={COLORS.text + "44"}
+          placeholderTextColor={isDarkMode ? COLORS.white + "66" : COLORS.text + "44"}
           autoFocus
           onSubmitEditing={handleAddCustomAllergen}
           returnKeyType="done"
@@ -967,9 +1011,9 @@ export default function ProfileScreen() {
         <View style={styles.sheetFooter}>
           <TouchableOpacity
             onPress={() => setShowAddAllergen(false)}
-            style={styles.sheetBtnCancel}
+            style={[styles.sheetBtnCancel, isDarkMode && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}
           >
-            <Text style={styles.sheetBtnCancelText}>Cancelar</Text>
+            <Text style={[styles.sheetBtnCancelText, isDarkMode && { color: COLORS.white }]}>Cancelar</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleAddCustomAllergen}
@@ -991,13 +1035,13 @@ export default function ProfileScreen() {
         title="Cambiar de casa"
         icon={House}
       >
-        <Text style={styles.fieldLabel}>Token de invitacion</Text>
+        <Text style={[styles.fieldLabel, isDarkMode && { color: COLORS.white, opacity: 0.82 }]}>Token de invitacion</Text>
         <TextInput
-          style={styles.fieldInput}
+          style={[styles.fieldInput, isDarkMode && { color: COLORS.white, backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}
           value={houseActionValue}
           onChangeText={setHouseActionValue}
           placeholder="Ej. ABCD-1234"
-          placeholderTextColor={COLORS.text + "44"}
+          placeholderTextColor={isDarkMode ? COLORS.white + "66" : COLORS.text + "44"}
           autoFocus
           autoCapitalize="none"
           keyboardType="default"
@@ -1008,10 +1052,10 @@ export default function ProfileScreen() {
         <View style={styles.sheetFooter}>
           <TouchableOpacity
             onPress={() => setShowHouseActionModal(false)}
-            style={styles.sheetBtnCancel}
+            style={[styles.sheetBtnCancel, isDarkMode && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}
             disabled={houseActionLoading !== null}
           >
-            <Text style={styles.sheetBtnCancelText}>Cancelar</Text>
+            <Text style={[styles.sheetBtnCancelText, isDarkMode && { color: COLORS.white }]}>Cancelar</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleChangeHouse}
@@ -1202,6 +1246,10 @@ const styles = StyleSheet.create({
     padding: 16,
     ...SHADOW_SM,
   },
+  identityPanelDark: {
+    backgroundColor: "#11351A",
+    borderColor: COLORS.secondary + "66",
+  },
   identityPanelGlow: {
     position: "absolute",
     width: 200,
@@ -1210,6 +1258,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.secondary + "1C",
     right: -90,
     top: -96,
+  },
+  identityPanelGlowDark: {
+    backgroundColor: COLORS.primary + "24",
   },
   identityTextBlock: { flex: 1 },
   identityMetaRow: { flexDirection: "row", gap: 8, marginTop: 10 },
@@ -1224,11 +1275,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
+  metaPillDark: {
+    backgroundColor: COLORS.white + "12",
+    borderColor: COLORS.white + "2D",
+  },
   metaPillText: {
     color: COLORS.text,
     opacity: 0.8,
     fontSize: 10,
     fontWeight: "700",
+  },
+  metaPillTextDark: {
+    color: COLORS.white,
+    opacity: 0.84,
   },
   statsGrid: {
     marginTop: 4,
@@ -1266,6 +1325,31 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 12,
     fontWeight: "800",
+  },
+  themeToggleBtn: {
+    marginTop: 10,
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.forest + "35",
+    backgroundColor: COLORS.surfaceAlt,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  themeToggleBtnDark: {
+    backgroundColor: COLORS.forest,
+    borderColor: COLORS.primary + "45",
+  },
+  themeToggleText: {
+    color: COLORS.forest,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  themeToggleTextDark: {
+    color: COLORS.white,
   },
 
   editHintCard: {
@@ -1399,7 +1483,11 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     letterSpacing: -0.3,
   },
+  profileNameDarkMode: {
+    color: COLORS.white,
+  },
   profileEmailDark: { fontSize: 13, color: COLORS.text, opacity: 0.6, marginTop: 3 },
+  profileEmailDarkMode: { color: COLORS.white, opacity: 0.76 },
   profileTagSolid: {
     flexDirection: "row",
     alignItems: "center",
@@ -1603,6 +1691,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     ...SHADOW_SM,
   },
+  sectionDark: {
+    backgroundColor: "#11351A",
+    borderColor: COLORS.secondary + "66",
+  },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1620,7 +1712,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
   },
+  sectionTitleWrapDark: {
+    backgroundColor: COLORS.primary + "1F",
+    borderColor: COLORS.primary + "55",
+  },
   sectionTitle: { fontSize: 17, fontWeight: "800", color: COLORS.text },
+  sectionTitleDark: { color: COLORS.white },
   sectionBadge: {
     backgroundColor: COLORS.primary + "20",
     paddingHorizontal: 10,
@@ -1636,6 +1733,10 @@ const styles = StyleSheet.create({
     opacity: 0.45,
     marginBottom: 16,
     lineHeight: 17,
+  },
+  sectionSubDark: {
+    color: COLORS.white,
+    opacity: 0.72,
   },
   houseActionRow: {
     flexDirection: "row",
@@ -1699,6 +1800,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.text + "10",
   },
+  memberListDark: {
+    borderColor: COLORS.white + "24",
+  },
   memberRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1708,9 +1812,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.text + "08",
   },
+  memberRowDark: {
+    backgroundColor: "#1A2E1F",
+    borderTopColor: COLORS.white + "1A",
+  },
   memberInfo: { flex: 1 },
   memberName: { fontSize: 15, fontWeight: "700", color: COLORS.text },
+  memberNameDark: { color: COLORS.white },
   memberRole: { fontSize: 11, color: COLORS.text, opacity: 0.45, marginTop: 1 },
+  memberRoleDark: { color: COLORS.white, opacity: 0.68 },
   memberDeleteBtn: {
     width: 28,
     height: 28,
@@ -1748,6 +1858,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary + "35",
   },
   emptyMembersText: { fontSize: 14, color: COLORS.text, opacity: 0.45 },
+  emptyMembersTextDark: { color: COLORS.white, opacity: 0.68 },
 
   // ── Modal
   modalOverlay: {

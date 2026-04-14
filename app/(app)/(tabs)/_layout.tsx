@@ -1,11 +1,12 @@
-import { COLORS } from '@/src/shared/theme/colors';
-import { Tabs } from 'expo-router';
-import { Heart, Home, Refrigerator, UserCircle2 } from 'lucide-react-native';
+import { useTheme, useThemeColors } from '@/src/shared/theme/ThemeProvider';
+import { useNetwork } from '@/src/shared/network/NetworkProvider';
+import { Tabs, usePathname, useRouter } from 'expo-router';
+import { Heart, Home, Refrigerator, ShoppingCart, UserCircle2 } from 'lucide-react-native';
 import React from 'react';
 import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function TabIcon({ focused, children }: { focused: boolean; children: React.ReactNode }) {
+function TabIcon({ focused, children, activeColor }: { focused: boolean; children: React.ReactNode; activeColor: string }) {
   return (
     <View style={{ alignItems: 'center' }}>
       {children}
@@ -15,7 +16,7 @@ function TabIcon({ focused, children }: { focused: boolean; children: React.Reac
             width: 5,
             height: 5,
             borderRadius: 3,
-            backgroundColor: COLORS.primary,
+            backgroundColor: activeColor,
             marginTop: 3,
           }}
         />
@@ -28,18 +29,29 @@ function TabIcon({ focused, children }: { focused: boolean; children: React.Reac
 const TAB_BAR_CONTENT = 52;
 
 export default function TabsLayout() {
+  const { isOnline } = useNetwork();
+  const { isDark } = useTheme();
+  const colors = useThemeColors();
+  const pathname = usePathname();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabPaddingTop = 8;
   const tabPaddingBottom = 8 + insets.bottom;
   const tabBarHeight = tabPaddingTop + TAB_BAR_CONTENT + tabPaddingBottom;
+
+  React.useEffect(() => {
+    if (isOnline) return;
+    if (pathname === '/(app)/(tabs)/favorites') return;
+    router.replace('/(app)/(tabs)/favorites');
+  }, [isOnline, pathname, router]);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: '#8AA898',
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
           height: tabBarHeight,
           paddingBottom: tabPaddingBottom,
@@ -48,7 +60,7 @@ export default function TabsLayout() {
           borderTopRightRadius: 28,
           position: 'absolute',
           borderTopWidth: 0,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: colors.surface,
           ...Platform.select({
             ios: {
               shadowColor: '#000',
@@ -60,6 +72,7 @@ export default function TabsLayout() {
           }),
         },
         tabBarLabelStyle: {
+          color: isDark ? colors.white : undefined,
           fontSize: 11,
           fontWeight: '700',
           letterSpacing: 0.2,
@@ -71,8 +84,9 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Inicio',
+          href: isOnline ? '/(app)/(tabs)' : null,
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon focused={focused}>
+            <TabIcon focused={focused} activeColor={colors.primary}>
               <Home size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
             </TabIcon>
           ),
@@ -82,8 +96,9 @@ export default function TabsLayout() {
         name="fridge"
         options={{
           title: 'Nevera',
+          href: isOnline ? '/(app)/(tabs)/fridge' : null,
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon focused={focused}>
+            <TabIcon focused={focused} activeColor={colors.primary}>
               <Refrigerator size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
             </TabIcon>
           ),
@@ -94,8 +109,20 @@ export default function TabsLayout() {
         options={{
           title: 'Favoritos',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon focused={focused}>
+            <TabIcon focused={focused} activeColor={colors.primary}>
               <Heart size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
+            </TabIcon>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="shopping"
+        options={{
+          title: 'Compras',
+          href: isOnline ? '/(app)/(tabs)/shopping' : null,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon focused={focused} activeColor={colors.primary}>
+              <ShoppingCart size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
             </TabIcon>
           ),
         }}
@@ -104,8 +131,9 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Perfil',
+          href: isOnline ? '/(app)/(tabs)/profile' : null,
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon focused={focused}>
+            <TabIcon focused={focused} activeColor={colors.primary}>
               <UserCircle2 size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
             </TabIcon>
           ),

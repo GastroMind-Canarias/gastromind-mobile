@@ -29,6 +29,7 @@ const RecipeDetailScreen: React.FC = () => {
     const raw = Array.isArray(recipeParam) ? recipeParam[0] : recipeParam;
     if (!raw || typeof raw !== 'string') return null;
     try {
+      j
       return JSON.parse(raw) as Recipe;
     } catch {
       return null;
@@ -67,7 +68,7 @@ const RecipeDetailScreen: React.FC = () => {
 
     setFavoriteLoading(true);
     try {
-    if (isFavorite && favoriteId) {
+      if (isFavorite && favoriteId) {
         await favoriteService.deleteMine(favoriteId);
         setIsFavorite(false);
         setFavoriteId(null);
@@ -107,13 +108,13 @@ const RecipeDetailScreen: React.FC = () => {
         {/* HERO IMAGE */}
         <View style={styles.imageContainer}>
           <Image source={{ uri: recipe.image_url }} style={styles.heroImage} />
-          
+
           {/* OVERLAY & BACK BUTTON */}
           <SafeAreaView edges={['top']} style={styles.backButtonContainer}>
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
               <ArrowLeft size={20} color={DARK_GREEN} strokeWidth={2.8} />
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={[styles.bookmarkButton, favoriteLoading && styles.bookmarkButtonDisabled]}
               onPress={handleToggleFavorite}
@@ -128,20 +129,20 @@ const RecipeDetailScreen: React.FC = () => {
               />
             </TouchableOpacity>
           </SafeAreaView>
-          
+
           <View style={styles.imageOverlay} />
         </View>
 
         {/* CONTENT */}
         <Animated.View style={[styles.contentContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          
+
           <View style={styles.titleRow}>
             <View style={styles.difficultyBadge}>
               <Text style={styles.difficultyText}>{recipe.difficulty}</Text>
             </View>
             <Text style={styles.title}>{recipe.title}</Text>
           </View>
-          
+
           <Text style={styles.description}>{recipe.description}</Text>
 
           {/* STATS */}
@@ -179,7 +180,7 @@ const RecipeDetailScreen: React.FC = () => {
               <Text style={styles.sectionTitle}>Instrucciones</Text>
               <View style={styles.sectionLine} />
             </View>
-            
+
             <View style={styles.instructionCard}>
               <Text style={styles.instructionText}>
                 {recipe.instructions}
@@ -206,7 +207,7 @@ const SHADOW_PRIMARY = Platform.select({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#E9F5EE' },
-  
+
   // Hero Image
   imageContainer: {
     width: '100%',

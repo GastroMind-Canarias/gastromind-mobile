@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { COLORS } from "../../../shared/theme/colors";
+import { useTheme } from "../../../shared/theme/ThemeProvider";
 
 type DialogVariant = "info" | "success" | "warning" | "danger";
 type DialogButtonTone = "primary" | "secondary" | "danger";
@@ -35,15 +36,15 @@ type AppDialogProps = {
   actions: AppDialogAction[];
 };
 
-const VARIANT_META: Record<
+const getVariantMeta = (primary: string, error: string): Record<
   DialogVariant,
   { color: string; icon: LucideIcon; glow: string }
-> = {
+> => ({
   info: { color: "#2D8CFF", icon: Info, glow: "#2D8CFF1F" },
-  success: { color: COLORS.primary, icon: CheckCircle2, glow: COLORS.primary + "20" },
+  success: { color: primary, icon: CheckCircle2, glow: primary + "20" },
   warning: { color: "#E58A12", icon: AlertTriangle, glow: "#E58A121F" },
-  danger: { color: COLORS.error, icon: ShieldAlert, glow: COLORS.error + "1F" },
-};
+  danger: { color: error, icon: ShieldAlert, glow: error + "1F" },
+});
 
 export function AppDialog({
   visible,
@@ -53,19 +54,40 @@ export function AppDialog({
   variant = "info",
   actions,
 }: AppDialogProps) {
-  const meta = VARIANT_META[variant];
+  const { isDark, colors } = useTheme();
+  const meta = getVariantMeta(colors.primary, colors.error)[variant];
   const Icon = meta.icon;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.card}>
+      <Pressable
+        style={[
+          styles.overlay,
+          isDark && { backgroundColor: "rgba(3,9,6,0.78)" },
+        ]}
+        onPress={onClose}
+      >
+        <Pressable
+          style={[
+            styles.card,
+            isDark && {
+              backgroundColor: colors.surface,
+              borderColor: colors.secondary + "66",
+            },
+          ]}
+        >
           <View style={[styles.topGlow, { backgroundColor: meta.glow }]} />
-          <View style={[styles.iconWrap, { borderColor: meta.color + "44" }]}>
+          <View
+            style={[
+              styles.iconWrap,
+              { borderColor: meta.color + "44" },
+              isDark && { backgroundColor: colors.surfaceAlt },
+            ]}
+          >
             <Icon size={20} color={meta.color} strokeWidth={2.5} />
           </View>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
+          <Text style={[styles.title, isDark && { color: colors.white }]}>{title}</Text>
+          <Text style={[styles.message, isDark && { color: colors.white, opacity: 0.8 }]}>{message}</Text>
           <View style={styles.actionsRow}>
             {actions.map((action) => {
               const tone = action.tone ?? "primary";
@@ -76,6 +98,13 @@ export function AppDialog({
                     styles.actionBtn,
                     tone === "secondary" && styles.actionBtnSecondary,
                     tone === "danger" && styles.actionBtnDanger,
+                    tone === "secondary" &&
+                      isDark && {
+                        backgroundColor: colors.surfaceAlt,
+                        borderColor: colors.secondary + "66",
+                      },
+                    tone === "danger" && { backgroundColor: colors.error, borderColor: colors.error },
+                    tone === "primary" && { backgroundColor: colors.primary, borderColor: colors.primary },
                   ]}
                   onPress={action.onPress}
                   activeOpacity={0.85}
@@ -84,6 +113,7 @@ export function AppDialog({
                     style={[
                       styles.actionText,
                       tone === "secondary" && styles.actionTextSecondary,
+                      tone === "secondary" && isDark && { color: colors.white },
                     ]}
                   >
                     {action.label}

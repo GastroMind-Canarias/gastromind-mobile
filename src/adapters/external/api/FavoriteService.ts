@@ -1,5 +1,6 @@
 import { Recipe } from '@/src/core/domain/recipe.types';
 import { apiClient } from './apiClient';
+import { favoriteOfflineStore } from '../storage/FavoriteOfflineStore';
 
 export interface UserFavorite {
   id: string;
@@ -80,9 +81,26 @@ const extractList = (payload: any): any[] => {
 export const favoriteService = {
   getMine: async (): Promise<UserFavorite[]> => {
     const response = await apiClient.get('/user-favorites/me');
-    return extractList(response.data)
+    const normalized = extractList(response.data)
       .map((item) => normalizeFavorite(item))
       .filter((item): item is UserFavorite => Boolean(item));
+    await favoriteOfflineStore.replaceAll(normalized);
+    return normalized;
+  },
+
+  getMineOffline: async (): Promise<UserFavorite[]> => {
+    return favoriteOfflineStore.getAll();
+  },
+
+  syncMineOfflineCache: async (): Promise<void> => {
+    try {
+      const response = await apiClient.get('/user-favorites/me');
+      const normalized = extractList(response.data)
+        .map((item) => normalizeFavorite(item))
+        .filter((item): item is UserFavorite => Boolean(item));
+      await favoriteOfflineStore.replaceAll(normalized);
+    } catch {
+    }
   },
 
   getMineById: async (id: string): Promise<UserFavorite | null> => {

@@ -20,6 +20,8 @@ import {
 import { ChefHat, Clock3, Flame, Heart, RefreshCw, Trash2 } from 'lucide-react-native';
 import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
+import { useNetwork } from '../../../shared/network/NetworkProvider';
+import { useTheme } from '../../../shared/theme/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
@@ -30,18 +32,19 @@ const ICE = '#C8F0DC';
 // ─── Componente Tarjeta de Receta ─────────────────────────────────────────────
 const RecipeCard: React.FC<{
   favorite: UserFavorite;
+  isDark: boolean;
   onPress: () => void;
   onRemove: () => void;
-}> = ({ favorite, onPress, onRemove }) => {
+}> = ({ favorite, isDark, onPress, onRemove }) => {
   const { recipe } = favorite;
   const scale = useRef(new Animated.Value(1)).current;
   const pressIn = () => Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 60, bounciness: 0 }).start();
   const pressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
 
   return (
-    <Animated.View style={[styles.recipeCardWrap, { transform: [{ scale }] }]}>
+    <Animated.View style={[styles.recipeCardWrap, { transform: [{ scale }] }]}> 
       <TouchableOpacity
-        style={styles.recipeCard}
+        style={[styles.recipeCard, isDark && { backgroundColor: '#11351A', borderWidth: 1, borderColor: COLORS.secondary + '55' }]}
         onPress={onPress}
         onPressIn={pressIn}
         onPressOut={pressOut}
@@ -61,22 +64,22 @@ const RecipeCard: React.FC<{
         {/* Info */}
         <View style={styles.recipeInfo}>
           <View style={styles.recipeHeader}>
-            <Text style={styles.recipeTitle} numberOfLines={1}>{recipe.title}</Text>
+            <Text style={[styles.recipeTitle, isDark && { color: COLORS.white }]} numberOfLines={1}>{recipe.title}</Text>
           </View>
-          <Text style={styles.recipeDesc} numberOfLines={2}>{recipe.description}</Text>
+          <Text style={[styles.recipeDesc, isDark && { color: COLORS.white, opacity: 0.78 }]} numberOfLines={2}>{recipe.description}</Text>
 
           <View style={styles.recipeStats}>
-            <View style={styles.statItem}>
-              <Clock3 size={12} color={DARK_GREEN} strokeWidth={2.4} />
-              <Text style={styles.statText}>{recipe.prep_time}m</Text>
+            <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
+              <Clock3 size={12} color={isDark ? COLORS.white : DARK_GREEN} strokeWidth={2.4} />
+              <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.prep_time}m</Text>
             </View>
-            <View style={styles.statItem}>
+            <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
               <Flame size={12} color={COLORS.accent} strokeWidth={2.4} />
-              <Text style={styles.statText}>{recipe.calories} kcal</Text>
+              <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.calories} kcal</Text>
             </View>
-            <View style={styles.statItem}>
+            <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
               <ChefHat size={12} color={COLORS.primary} strokeWidth={2.4} />
-              <Text style={styles.statText}>{recipe.appliance_needed}</Text>
+              <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.appliance_needed}</Text>
             </View>
           </View>
         </View>
@@ -87,6 +90,8 @@ const RecipeCard: React.FC<{
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const FavoriteRecipesScreen: React.FC = () => {
+  const { isOnline } = useNetwork();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [favorites, setFavorites] = useState<UserFavorite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,7 +114,9 @@ const FavoriteRecipesScreen: React.FC = () => {
     setError(null);
 
     try {
-      const list = await favoriteService.getMine();
+      const list = isOnline
+        ? await favoriteService.getMine()
+        : await favoriteService.getMineOffline();
       setFavorites(list);
     } catch (e: any) {
       const message =
@@ -121,7 +128,7 @@ const FavoriteRecipesScreen: React.FC = () => {
       if (showLoader) setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [isOnline]);
 
   useFocusEffect(
     useCallback(() => {
@@ -142,6 +149,11 @@ const FavoriteRecipesScreen: React.FC = () => {
   };
 
   const handleDeleteFavorite = (favoriteId: string, recipeTitle: string) => {
+    if (!isOnline) {
+      Alert.alert('Sin conexión', 'Sin internet solo podes consultar favoritos guardados localmente.');
+      return;
+    }
+
     Alert.alert(
       'Quitar de favoritos',
       `Vas a quitar "${recipeTitle}" de tu lista.`,
@@ -169,19 +181,19 @@ const FavoriteRecipesScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingRoot}>
-        <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} translucent={false} />
+      <View style={[styles.loadingRoot, isDark && { backgroundColor: '#0C100D' }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0C100D' : DARK_GREEN} translucent={false} />
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Cargando tus recetas favoritas...</Text>
+        <Text style={[styles.loadingText, isDark && { color: COLORS.white, opacity: 0.8 }]}>Cargando tus recetas favoritas...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} translucent={false} />
+    <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0C100D' : DARK_GREEN} translucent={false} />
       {/* ══ HEADER PANEL ══ */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.header, isDark && { backgroundColor: '#11351A' }, { paddingTop: insets.top + 12 }]}> 
         <View style={styles.headerTopBar}>
           <View style={styles.ledRow}>
             <View style={styles.led} />
@@ -216,20 +228,24 @@ const FavoriteRecipesScreen: React.FC = () => {
           }
         >
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Platos Guardados</Text>
-            <View style={styles.sectionLine} />
+            <Text style={[styles.sectionTitle, isDark && { color: COLORS.white, opacity: 0.8 }]}>Platos Guardados</Text>
+            <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + '2A' }]} />
           </View>
 
-          {error && <Text style={styles.errorText}>{error}</Text>}
+          {!isOnline ? (
+            <Text style={[styles.errorText, { color: '#D18E2B' }]}>Modo sin conexión: mostrando favoritos almacenados.</Text>
+          ) : null}
+
+          {error && <Text style={[styles.errorText, isDark && { color: '#FF9A9A' }]}>{error}</Text>}
 
           <View style={styles.listContainer}>
             {sortedFavorites.length === 0 ? (
-              <View style={styles.emptyCard}>
+              <View style={[styles.emptyCard, isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '55' }]}>
                 <View style={styles.emptyIconWrap}>
                   <Heart size={24} color={COLORS.error} strokeWidth={2.4} />
                 </View>
-                <Text style={styles.emptyTitle}>Todavia no tenes favoritos</Text>
-                <Text style={styles.emptySubtitle}>
+                <Text style={[styles.emptyTitle, isDark && { color: COLORS.white }]}>Todavia no tenes favoritos</Text>
+                <Text style={[styles.emptySubtitle, isDark && { color: COLORS.white, opacity: 0.75 }]}>
                   Genera recetas con IA o guarda una desde sugerencias para verla aca.
                 </Text>
               </View>
@@ -238,6 +254,7 @@ const FavoriteRecipesScreen: React.FC = () => {
                 <RecipeCard
                   key={fav.id}
                   favorite={fav}
+                  isDark={isDark}
                   onPress={() => pushRecipeDetail(fav.recipe as Recipe)}
                   onRemove={() => handleDeleteFavorite(fav.id, fav.recipe.title)}
                 />

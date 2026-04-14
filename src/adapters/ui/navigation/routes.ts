@@ -7,7 +7,9 @@ export const ROUTES = {
   authLogin: '/(auth)/login' as Href,
   authRegister: '/(auth)/register' as Href,
   appTabs: '/(app)/(tabs)' as Href,
+  aiChat: '/(app)/ai-chat' as Href,
   appTabFridge: '/(app)/(tabs)/fridge' as Href,
+  appTabShopping: '/(app)/(tabs)/shopping' as Href,
   appTabProfile: '/(app)/(tabs)/profile' as Href,
   recipeDetail: '/(app)/recipe-detail' as Href,
 } as const;

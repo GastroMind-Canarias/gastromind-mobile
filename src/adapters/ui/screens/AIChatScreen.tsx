@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Bot, ChefHat, Clock3, Heart, Wrench } from 'lucide-react-native';
 import { apiClient } from '../../external/api/apiClient';
 import { COLORS } from '../../../shared/theme/colors';
+import { useTheme } from '../../../shared/theme/ThemeProvider';
 
 type SuggestionIngredient = {
   productId: string;
@@ -36,13 +37,20 @@ type SuggestionRecipe = {
 };
 
 type SuggestionResponse = {
-  suggestionId: string;
+  suggestionId?: string;
+  suggestion_id?: string;
   recipe: SuggestionRecipe;
+};
+
+const getSuggestionId = (data: SuggestionResponse | null): string => {
+  if (!data) return '';
+  return data.suggestionId || data.suggestion_id || '';
 };
 
 const DARK = '#0D1F17';
 
 const AIChatScreen: React.FC = () => {
+  const { isDark, colors } = useTheme();
   const navigation = useNavigation<any>();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
@@ -92,29 +100,26 @@ const AIChatScreen: React.FC = () => {
   };
 
   const addRecipeToFavorites = async () => {
-    if (!suggestion?.recipe.id) return;
+    const suggestionId = getSuggestionId(suggestion);
+    if (!suggestionId) {
+      setError('No llego suggestionId desde la receta sugerida.');
+      return;
+    }
 
     setIsSavingFavorite(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const token = await AsyncStorage.getItem('userToken');
-
-      if (!token) {
-        throw new Error('No se encontro el token de usuario.');
+      try {
+        await apiClient.post('/user-favorites/me/from-suggestion', {
+          suggestionId,
+        });
+      } catch {
+        await apiClient.post('/user-favorites/me/from-suggestion', {
+          suggestion_id: suggestionId,
+        });
       }
-
-      await apiClient.post(
-        '/user-favorites/me/from-suggestion',
-        { recipeId: suggestion.recipe.id },
-        {
-          headers: {
-            Accept: '*/*',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
 
       setSuccess('Receta anadida a favoritos.');
     } catch (e: any) {
@@ -129,33 +134,33 @@ const AIChatScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={DARK} />
+    <View style={[styles.root, isDark && { backgroundColor: colors.background }]}> 
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? colors.background : DARK} />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <ArrowLeft size={18} color={DARK} strokeWidth={2.7} />
+      <View style={[styles.header, isDark && { backgroundColor: '#11351A' }]}> 
+        <TouchableOpacity style={[styles.backButton, isDark && { backgroundColor: '#1A2E1F' }]} onPress={() => navigation.goBack()}>
+          <ArrowLeft size={18} color={isDark ? COLORS.white : DARK} strokeWidth={2.7} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chat de recetas IA</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.botBubble}>
+        <View style={[styles.botBubble, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
           <Bot size={16} color={COLORS.primary} strokeWidth={2.7} />
-          <Text style={styles.botBubbleText}>
+          <Text style={[styles.botBubbleText, isDark && { color: COLORS.white, opacity: 0.92 }]}>
             Te ayudo a crear una receta con lo que tienes en casa.
           </Text>
         </View>
 
-        <View style={styles.userQuestionBubble}>
+        <View style={[styles.userQuestionBubble, isDark && { backgroundColor: '#1A2E1F', borderWidth: 1, borderColor: colors.secondary + '66' }]}>
           <Text style={styles.userQuestionText}>Cuantos comensales son?</Text>
         </View>
 
-        <View style={styles.servingsCard}>
-          <Text style={styles.servingsLabel}>Comensales</Text>
+        <View style={[styles.servingsCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
+          <Text style={[styles.servingsLabel, isDark && { color: COLORS.white, opacity: 0.76 }]}>Comensales</Text>
           <View style={styles.servingsRow}>
             <TouchableOpacity
-              style={styles.stepperButton}
+              style={[styles.stepperButton, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}
               onPress={() => {
                 const current = Number.parseInt(servingsInput, 10);
                 const safeCurrent = Number.isFinite(current) ? current : 1;
@@ -163,21 +168,21 @@ const AIChatScreen: React.FC = () => {
               }}
               activeOpacity={0.86}
             >
-              <Text style={styles.stepperButtonText}>-</Text>
+              <Text style={[styles.stepperButtonText, isDark && { color: COLORS.white }]}>-</Text>
             </TouchableOpacity>
 
             <TextInput
-              style={styles.servingsInput}
+              style={[styles.servingsInput, isDark && { color: COLORS.white, backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}
               value={servingsInput}
               onChangeText={(text) => setServingsInput(text.replace(/[^0-9]/g, ''))}
               keyboardType="number-pad"
               maxLength={2}
               placeholder="2"
-              placeholderTextColor="#8BAA97"
+              placeholderTextColor={isDark ? COLORS.white + '70' : '#8BAA97'}
             />
 
             <TouchableOpacity
-              style={styles.stepperButton}
+              style={[styles.stepperButton, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}
               onPress={() => {
                 const current = Number.parseInt(servingsInput, 10);
                 const safeCurrent = Number.isFinite(current) ? current : 1;
@@ -185,7 +190,7 @@ const AIChatScreen: React.FC = () => {
               }}
               activeOpacity={0.86}
             >
-              <Text style={styles.stepperButtonText}>+</Text>
+              <Text style={[styles.stepperButtonText, isDark && { color: COLORS.white }]}>+</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -210,34 +215,34 @@ const AIChatScreen: React.FC = () => {
         {success ? <Text style={styles.successText}>{success}</Text> : null}
 
         {suggestion ? (
-          <View style={styles.recipeCard}>
+          <View style={[styles.recipeCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
             <Text style={styles.recipeBadge}>{suggestion.recipe.difficulty}</Text>
-            <Text style={styles.recipeTitle}>{suggestion.recipe.title}</Text>
-            <Text style={styles.recipeInstructions}>{suggestion.recipe.instructions}</Text>
+            <Text style={[styles.recipeTitle, isDark && { color: COLORS.white }]}>{suggestion.recipe.title}</Text>
+            <Text style={[styles.recipeInstructions, isDark && { color: COLORS.white, opacity: 0.86 }]}>{suggestion.recipe.instructions}</Text>
 
             <View style={styles.metaRow}>
-              <View style={styles.metaPill}>
+              <View style={[styles.metaPill, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
                 <Clock3 size={12} color={COLORS.primary} strokeWidth={2.4} />
-                <Text style={styles.metaText}>{suggestion.recipe.prep_time} min</Text>
+                <Text style={[styles.metaText, isDark && { color: COLORS.white }]}>{suggestion.recipe.prep_time} min</Text>
               </View>
-              <View style={styles.metaPill}>
-                <Wrench size={12} color={DARK} strokeWidth={2.4} />
-                <Text style={styles.metaText}>{suggestion.recipe.appliance_needed}</Text>
+              <View style={[styles.metaPill, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
+                <Wrench size={12} color={isDark ? COLORS.white : DARK} strokeWidth={2.4} />
+                <Text style={[styles.metaText, isDark && { color: COLORS.white }]}>{suggestion.recipe.appliance_needed}</Text>
               </View>
             </View>
 
-            <Text style={styles.sectionTitle}>Ingredientes usados</Text>
+            <Text style={[styles.sectionTitle, isDark && { color: COLORS.white, opacity: 0.75 }]}>Ingredientes usados</Text>
             {suggestion.recipe.ingredientsUsed?.length ? (
               suggestion.recipe.ingredientsUsed.map((ingredient) => (
-                <View key={`${ingredient.productId}-${ingredient.productName}`} style={styles.ingredientRow}>
-                  <Text style={styles.ingredientName}>{ingredient.productName}</Text>
+                <View key={`${ingredient.productId}-${ingredient.productName}`} style={[styles.ingredientRow, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
+                  <Text style={[styles.ingredientName, isDark && { color: COLORS.white }]}>{ingredient.productName}</Text>
                   <Text style={styles.ingredientQty}>
                     {ingredient.quantityUsed} / {ingredient.quantityAvailable}
                   </Text>
                 </View>
               ))
             ) : (
-              <Text style={styles.recipeInstructions}>Sin detalle de ingredientes.</Text>
+              <Text style={[styles.recipeInstructions, isDark && { color: COLORS.white, opacity: 0.82 }]}>Sin detalle de ingredientes.</Text>
             )}
 
             <TouchableOpacity

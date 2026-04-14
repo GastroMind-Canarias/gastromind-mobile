@@ -32,6 +32,7 @@ import {
 } from 'lucide-react-native';
 import { FridgeItem, ItemStatus } from '../../../core/domain/fridgeItem.types';
 import { COLORS } from '../../../shared/theme/colors';
+import { useTheme } from '../../../shared/theme/ThemeProvider';
 import { fridgeService } from '../../external/api/FridgeService';
 import { apiClient } from '../../external/api/apiClient';
 import { AppBottomSheet } from '../components/AppBottomSheet';
@@ -141,7 +142,8 @@ function StatChip({
 // ─── Item card ────────────────────────────────────────────────────────────────
 function ItemCard({
   item, onEdit, onDelete,
-}: { item: FridgeItem; onEdit: () => void; onDelete: () => void }) {
+  isDark,
+}: { item: FridgeItem; onEdit: () => void; onDelete: () => void; isDark: boolean }) {
   const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG[ItemStatus.GOOD];
   const StatusIcon = cfg.icon;
   const expiryMeta = getExpiryMeta(item.expirationDate, item.status);
@@ -150,7 +152,13 @@ function ItemCard({
   const pressOut = () => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
 
   return (
-    <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}> 
+    <Animated.View
+      style={[
+        styles.card,
+        isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '55' },
+        { transform: [{ scale: scaleAnim }] },
+      ]}
+    >
       <View style={[styles.cardStrip, { backgroundColor: cfg.color }]} />
 
       <View style={styles.cardBody}>
@@ -159,13 +167,13 @@ function ItemCard({
             <StatusIcon size={20} color={cfg.color} strokeWidth={2.6} />
           </View>
           <View style={styles.cardMeta}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{item.product}</Text>
+            <Text style={[styles.cardTitle, isDark && { color: COLORS.white }]} numberOfLines={1}>{item.product}</Text>
             <View style={styles.cardSubRow}>
-              <Text style={styles.cardSubKey}>Cant.</Text>
-              <Text style={styles.cardSubValue}>{item.quantity} uds.</Text>
-              <Text style={styles.cardSubDot}>•</Text>
-              <Text style={styles.cardSubKey}>Cad.</Text>
-              <Text style={styles.cardSubValue}>{item.expirationDate}</Text>
+              <Text style={[styles.cardSubKey, isDark && { color: COLORS.white + 'CC' }]}>Cant.</Text>
+              <Text style={[styles.cardSubValue, isDark && { color: COLORS.white }]}>{item.quantity} uds.</Text>
+              <Text style={[styles.cardSubDot, isDark && { color: COLORS.white + '88' }]}>•</Text>
+              <Text style={[styles.cardSubKey, isDark && { color: COLORS.white + 'CC' }]}>Cad.</Text>
+              <Text style={[styles.cardSubValue, isDark && { color: COLORS.white }]}>{item.expirationDate}</Text>
             </View>
           </View>
           <View style={[styles.statusPill, { backgroundColor: cfg.bg, borderColor: cfg.color + '55' }]}> 
@@ -173,12 +181,12 @@ function ItemCard({
           </View>
         </View>
 
-        <View style={styles.cardDivider} />
+        <View style={[styles.cardDivider, isDark && { backgroundColor: COLORS.white + '1F' }]} />
 
         <View style={styles.metaRow}>
           <View style={styles.metaPill}>
             <Snowflake size={13} color={COLORS.primary} strokeWidth={2.5} />
-            <Text style={styles.metaPillText}>{item.quantity} uds.</Text>
+            <Text style={[styles.metaPillText, isDark && { color: COLORS.white }]}>{item.quantity} uds.</Text>
           </View>
           <View style={[styles.metaPill, { backgroundColor: expiryMeta.bg, borderColor: expiryMeta.border }]}> 
             <StatusIcon size={13} color={expiryMeta.color} strokeWidth={2.5} />
@@ -194,7 +202,7 @@ function ItemCard({
             <Pencil size={14} color={COLORS.primary} strokeWidth={2.6} />
             <Text style={[styles.cardBtnText, { color: COLORS.primary }]}>Editar</Text>
           </TouchableOpacity>
-          <View style={styles.cardBtnSep} />
+          <View style={[styles.cardBtnSep, isDark && { backgroundColor: COLORS.white + '26' }]} />
           <TouchableOpacity
             onPress={onDelete} onPressIn={pressIn} onPressOut={pressOut}
             style={styles.cardBtn}
@@ -220,6 +228,7 @@ function TicketModal({
   userId: string;
   onImported: () => Promise<void>;
 }) {
+  const { isDark, colors } = useTheme();
   const [isProcessing, setIsProcessing] = useState(false);
   const [storeId, setStoreId] = useState('');
   const [dialog, setDialog] = useState<{
@@ -377,14 +386,19 @@ function TicketModal({
         icon={Ticket}
       >
           
-          <View style={styles.ticketPlaceholder}>
+          <View
+            style={[
+              styles.ticketPlaceholder,
+              isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' },
+            ]}
+          >
             {isProcessing ? (
               <View style={styles.processingWrap}>
                 <View style={styles.loadingPulse}>
                    <Ticket size={40} color={COLORS.primary} strokeWidth={2} />
                 </View>
-                <Text style={styles.processingTitle}>Analizando ticket...</Text>
-                <Text style={styles.processingSub}>Nuestra IA está extrayendo los productos y fechas de caducidad.</Text>
+                <Text style={[styles.processingTitle, isDark && { color: COLORS.white }]}>Analizando ticket...</Text>
+                <Text style={[styles.processingSub, isDark && { color: COLORS.white, opacity: 0.76 }]}>Nuestra IA está extrayendo los productos y fechas de caducidad.</Text>
                 <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 20 }} />
               </View>
             ) : (
@@ -392,18 +406,18 @@ function TicketModal({
                 <View style={styles.ticketPH_IconWrap}>
                   <Ticket size={34} color={COLORS.primary} strokeWidth={2.4} />
                 </View>
-                <Text style={styles.ticketPH_Title}>Escanea tu ticket de compra</Text>
-                <Text style={styles.ticketPH_Sub}>
+                <Text style={[styles.ticketPH_Title, isDark && { color: COLORS.white }]}>Escanea tu ticket de compra</Text>
+                <Text style={[styles.ticketPH_Sub, isDark && { color: COLORS.white, opacity: 0.78 }]}>
                   Haz una foto a tu ticket y GastroMind añadirá los productos automáticamente a tu nevera.
                 </Text>
 
-                <Text style={styles.fieldLabel}>Store ID (opcional)</Text>
+                <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Store ID (opcional)</Text>
                 <TextInput
-                  style={styles.fieldInput}
+                  style={[styles.fieldInput, isDark && { color: COLORS.white, backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}
                   value={storeId}
                   onChangeText={setStoreId}
                   placeholder="Ej. market-001"
-                  placeholderTextColor={COLORS.text + '44'}
+                  placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '44'}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
@@ -418,20 +432,23 @@ function TicketModal({
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
-                  style={styles.ticketGalleryBtn} 
+                  style={[styles.ticketGalleryBtn, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]} 
                   onPress={() => handlePickImage(false)}
                   activeOpacity={0.8}
                 >
                   <ImageIcon size={15} color={COLORS.primary} strokeWidth={2.6} />
-                  <Text style={styles.ticketGalleryBtnText}>Elegir de galería</Text>
+                  <Text style={[styles.ticketGalleryBtnText, isDark && { color: COLORS.white }]}>Elegir de galería</Text>
                 </TouchableOpacity>
               </>
             )}
           </View>
 
           {!isProcessing && (
-            <TouchableOpacity onPress={onClose} style={styles.sheetCloseBtn}>
-              <Text style={styles.sheetCloseBtnText}>Cerrar</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={[styles.sheetCloseBtn, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}
+            >
+              <Text style={[styles.sheetCloseBtnText, isDark && { color: COLORS.white }]}>Cerrar</Text>
             </TouchableOpacity>
           )}
       </AppBottomSheet>
@@ -459,6 +476,7 @@ function ItemFormModal({
   setExpDate: (v: string) => void; setStatus: (v: ItemStatus) => void;
   onSave: () => void; onClose: () => void;
 }) {
+  const { isDark, colors } = useTheme();
   return (
     <AppBottomSheet
       visible={visible}
@@ -468,28 +486,28 @@ function ItemFormModal({
     >
 
           <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-            <Text style={styles.fieldLabel}>Nombre</Text>
+            <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Nombre</Text>
             <TextInput
-              style={styles.fieldInput} value={productName}
+              style={[styles.fieldInput, isDark && { color: COLORS.white, backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]} value={productName}
               onChangeText={setProductName} placeholder="Ej. Leche entera"
-              placeholderTextColor={COLORS.text + '44'}
+              placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '44'}
             />
 
-            <Text style={styles.fieldLabel}>Cantidad</Text>
+            <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Cantidad</Text>
             <TextInput
-              style={styles.fieldInput} keyboardType="numeric"
+              style={[styles.fieldInput, isDark && { color: COLORS.white, backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]} keyboardType="numeric"
               value={quantity} onChangeText={setQuantity}
-              placeholder="0.0" placeholderTextColor={COLORS.text + '44'}
+              placeholder="0.0" placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '44'}
             />
 
-            <Text style={styles.fieldLabel}>Fecha de caducidad</Text>
+            <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Fecha de caducidad</Text>
             <TextInput
-              style={styles.fieldInput} value={expDate}
+              style={[styles.fieldInput, isDark && { color: COLORS.white, backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]} value={expDate}
               onChangeText={setExpDate} placeholder="YYYY-MM-DD"
-              placeholderTextColor={COLORS.text + '44'}
+              placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '44'}
             />
 
-            <Text style={styles.fieldLabel}>Estado</Text>
+            <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Estado</Text>
             <View style={styles.statusRow}>
               {[ItemStatus.GOOD, ItemStatus.OPENED, ItemStatus.EXPIRED].map(s => {
                 const cfg = STATUS_CONFIG[s] || STATUS_CONFIG[ItemStatus.GOOD];
@@ -497,14 +515,18 @@ function ItemFormModal({
                 return (
                   <TouchableOpacity
                     key={s} onPress={() => setStatus(s)}
-                    style={[styles.statusOpt, active && { backgroundColor: cfg.color, borderColor: cfg.color }]}
+                    style={[
+                      styles.statusOpt,
+                      isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' },
+                      active && { backgroundColor: cfg.color, borderColor: cfg.color },
+                    ]}
                   >
                     <cfg.icon
                       size={16}
                       color={active ? COLORS.white : cfg.color}
                       strokeWidth={2.6}
                     />
-                    <Text style={[styles.statusOptLabel, { color: active ? COLORS.white : COLORS.text }]}> 
+                    <Text style={[styles.statusOptLabel, { color: active ? COLORS.white : isDark ? COLORS.white : COLORS.text }]}> 
                       {cfg.label}
                     </Text>
                   </TouchableOpacity>
@@ -513,8 +535,11 @@ function ItemFormModal({
             </View>
 
             <View style={styles.formFooter}>
-              <TouchableOpacity onPress={onClose} style={styles.formBtnCancel}>
-                <Text style={styles.formBtnCancelText}>Cancelar</Text>
+              <TouchableOpacity
+                onPress={onClose}
+                style={[styles.formBtnCancel, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}
+              >
+                <Text style={[styles.formBtnCancelText, isDark && { color: COLORS.white }]}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={onSave}
@@ -531,6 +556,7 @@ function ItemFormModal({
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 export default function FridgeApp() {
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<FridgeItem[]>([]);
   const [ticketUserId, setTicketUserId] = useState('');
@@ -668,10 +694,10 @@ export default function FridgeApp() {
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}>
       <StatusBar
-        barStyle="light-content"
-        backgroundColor={FRIDGE_DARK}
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={isDark ? '#0C100D' : FRIDGE_DARK}
         translucent={false}
       />
       <View style={styles.ambientOrbA} />
@@ -681,6 +707,7 @@ export default function FridgeApp() {
       <View
         style={[
           styles.fridgeHeader,
+          isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
           { paddingTop: Math.max(insets.top + 12, Platform.OS === 'ios' ? 58 : 44) },
         ]}
       >
@@ -722,20 +749,20 @@ export default function FridgeApp() {
       </View>
 
       {/* ══ FRIDGE BODY ══ */}
-      <View style={styles.fridgeBody}>
+      <View style={[styles.fridgeBody, isDark && { backgroundColor: '#0C100D' }]}>
         {/* Search bar */}
-        <View style={styles.searchWrap}>
-          <Search size={15} color={COLORS.text + '88'} strokeWidth={2.6} />
+        <View style={[styles.searchWrap, isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}>
+          <Search size={15} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.6} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, isDark && { color: COLORS.white }]}
             placeholder="Buscar producto..."
-            placeholderTextColor={COLORS.text + '55'}
+            placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '55'}
             value={search}
             onChangeText={setSearch}
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <X size={16} color={COLORS.text + '88'} strokeWidth={2.8} />
+              <X size={16} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.8} />
             </TouchableOpacity>
           )}
         </View>
@@ -748,14 +775,24 @@ export default function FridgeApp() {
         >
           <TouchableOpacity
             onPress={() => setActiveFilter('ALL')}
-            style={[styles.filterPill, activeFilter === 'ALL' && styles.filterPillActive]}
+            style={[
+              styles.filterPill,
+              isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
+              activeFilter === 'ALL' && styles.filterPillActive,
+            ]}
           >
             <Search
               size={14}
-              color={activeFilter === 'ALL' ? COLORS.white : COLORS.text + '99'}
+              color={activeFilter === 'ALL' ? COLORS.white : isDark ? COLORS.white + 'CC' : COLORS.text + '99'}
               strokeWidth={2.6}
             />
-            <Text style={[styles.filterPillText, activeFilter === 'ALL' && styles.filterPillTextActive]}>
+            <Text
+              style={[
+                styles.filterPillText,
+                isDark && { color: COLORS.white },
+                activeFilter === 'ALL' && styles.filterPillTextActive,
+              ]}
+            >
               Todas
             </Text>
           </TouchableOpacity>
@@ -770,6 +807,7 @@ export default function FridgeApp() {
                 onPress={() => setActiveFilter(s)}
                 style={[
                   styles.filterPill,
+                  isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
                   active && { backgroundColor: cfg.color, borderColor: cfg.color },
                 ]}
               >
@@ -778,7 +816,7 @@ export default function FridgeApp() {
                   color={active ? COLORS.white : cfg.color}
                   strokeWidth={2.6}
                 />
-                <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>{cfg.label}</Text>
+                <Text style={[styles.filterPillText, isDark && { color: COLORS.white }, active && styles.filterPillTextActive]}>{cfg.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -791,10 +829,10 @@ export default function FridgeApp() {
               <View style={styles.emptyIconWrap}>
                 <Snowflake size={34} color={COLORS.primary} strokeWidth={2.4} />
               </View>
-              <Text style={styles.emptyTitle}>
+              <Text style={[styles.emptyTitle, isDark && { color: COLORS.white, opacity: 0.88 }]}>
                 {search.trim() ? 'No encontrado' : 'Nevera vacía'}
               </Text>
-              <Text style={styles.emptySub}>
+              <Text style={[styles.emptySub, isDark && { color: COLORS.white, opacity: 0.72 }]}> 
                 {search.trim()
                   ? `No hay productos con "${search}"`
                   : 'Pulsa Añadir o importa un ticket'}
@@ -808,6 +846,7 @@ export default function FridgeApp() {
               renderItem={({ item }) => (
                 <ItemCard
                   item={item}
+                  isDark={isDark}
                   onEdit={() => openEdit(item)}
                   onDelete={() => handleDelete(item)}
                 />

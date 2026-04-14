@@ -1,5 +1,5 @@
 import { ChefHat, Lock, Mail, Sparkles } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ROUTES } from '../navigation/routes';
 import React, { useState } from 'react';
 import {
@@ -21,10 +21,18 @@ import { useAuth } from '../hooks/useAuth';
 const { width, height } = Dimensions.get('window');
 
 const LoginScreen: React.FC = () => {
+  const params = useLocalSearchParams<{ reason?: string }>();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
   const { signIn, loading, error } = useAuth();
+
+  const authRedirectError =
+    params.reason === 'user-error'
+      ? 'Hay un error con tu usuario. Inicia sesion nuevamente.'
+      : params.reason === 'not-logged-in'
+        ? 'No estas logeado. Inicia sesion para continuar.'
+        : null;
 
   const handleLogin = async () => {
     if (!username || !password) return;
@@ -65,7 +73,9 @@ const LoginScreen: React.FC = () => {
           </View>
 
           <View style={styles.form}>
-            {error && <Text style={styles.errorText}>{error}</Text>}
+            {(authRedirectError || error) && (
+              <Text style={styles.errorText}>{authRedirectError ?? error}</Text>
+            )}
             <CustomInput
               icon={Mail}
               placeholder="Tu usuario"

@@ -126,15 +126,23 @@ export const fridgeService = {
         productId = newProd.data.id;
       }
 
-      const fridgeId = await getDefaultFridgeId();
-
-      const response = await apiClient.post('/fridge-items', {
+      const payload = {
         productId: productId,
-        fridgeId: fridgeId,
         quantity: item.quantity,
         expirationDate: item.expirationDate,
-        status: item.status
-      });
+        status: item.status,
+      };
+
+      let response;
+      try {
+        response = await apiClient.post('/fridge-items/me', payload);
+      } catch {
+        const fridgeId = await getDefaultFridgeId();
+        response = await apiClient.post('/fridge-items', {
+          ...payload,
+          fridgeId: fridgeId,
+        });
+      }
 
       return {
         id: response.data.id,

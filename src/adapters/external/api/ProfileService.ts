@@ -4,6 +4,7 @@ import {
   UserProfile,
 } from "../../../core/domain/profile.types";
 import { apiClient } from "./apiClient";
+import { favoriteService } from "./FavoriteService";
 
 function pickText(...values: unknown[]): string {
   for (const value of values) {
@@ -44,6 +45,8 @@ async function getCurrentUser(): Promise<{
 
     const userAllergens =
       me.allergens || me.userAllergens || me.allergyProfiles || [];
+
+    favoriteService.syncMineOfflineCache();
 
     return {
       userId: pickText(me.id, me.userId, me.user_id),
