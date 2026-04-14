@@ -12,12 +12,55 @@ export const COLORS = {
 };
 
 let defaultFridgeId: string | null = null;
+
+const resolveFridgeId = (payload: any): string | null => {
+  if (!payload) return null;
+
+  if (Array.isArray(payload)) {
+    const first = payload[0];
+    if (!first) return null;
+    return first.id || first.fridgeId || null;
+  }
+
+  if (typeof payload === 'object') {
+    if (payload.id || payload.fridgeId) {
+      return payload.id || payload.fridgeId;
+    }
+
+    if (Array.isArray(payload.content) && payload.content.length > 0) {
+      return payload.content[0].id || payload.content[0].fridgeId || null;
+    }
+
+    if (Array.isArray(payload.data) && payload.data.length > 0) {
+      return payload.data[0].id || payload.data[0].fridgeId || null;
+    }
+  }
+
+  return null;
+};
+
+const resolveItemsList = (payload: any): any[] => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.content)) return payload.content;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+};
+
 const getDefaultFridgeId = async () => {
   if (defaultFridgeId) return defaultFridgeId;
   try {
-    const res = await apiClient.get('/fridges');
-    if (res.data && res.data.length > 0) {
-      defaultFridgeId = res.data[0].id;
+    const meRes = await apiClient.get('/fridges/me');
+    const meFridgeId = resolveFridgeId(meRes.data);
+    if (meFridgeId) {
+      defaultFridgeId = meFridgeId;
+      return defaultFridgeId;
+    }
+
+    const legacyRes = await apiClient.get('/fridges');
+    const legacyFridgeId = resolveFridgeId(legacyRes.data);
+    if (legacyFridgeId) {
+      defaultFridgeId = legacyFridgeId;
       return defaultFridgeId;
     }
   } catch (error) {
@@ -29,21 +72,33 @@ const getDefaultFridgeId = async () => {
 export const fridgeService = {
   getAll: async (): Promise<FridgeItem[]> => {
     try {
-      const fridgeId = await getDefaultFridgeId();
-      if (!fridgeId) return [];
-      
-      const response = await apiClient.get(`/fridge-items/fridge/${fridgeId}`);
-      return response.data.map((item: any) => ({
+      const meResponse = await apiClient.get('/fridge-items/me');
+      return resolveItemsList(meResponse.data).map((item: any) => ({
         id: item.id,
         quantity: item.quantity,
         expirationDate: item.expirationDate,
         status: item.status,
-        product: item.productName,
+        product: item.productName || item.product?.name || item.product,
         fridgeId: item.fridgeId
       }));
     } catch (e) {
-      console.error('Error fetching fridge items:', e);
-      return [];
+      try {
+        const fridgeId = await getDefaultFridgeId();
+        if (!fridgeId) return [];
+
+        const legacyResponse = await apiClient.get(`/fridge-items/fridge/${fridgeId}`);
+        return resolveItemsList(legacyResponse.data).map((item: any) => ({
+          id: item.id,
+          quantity: item.quantity,
+          expirationDate: item.expirationDate,
+          status: item.status,
+          product: item.productName || item.product?.name || item.product,
+          fridgeId: item.fridgeId
+        }));
+      } catch (legacyError) {
+        console.error('Error fetching fridge items:', legacyError);
+        return [];
+      }
     }
   },
 

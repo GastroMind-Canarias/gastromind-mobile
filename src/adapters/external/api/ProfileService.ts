@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Allergen,
   KitchenTool,
@@ -6,90 +5,18 @@ import {
 } from "../../../core/domain/profile.types";
 import { apiClient } from "./apiClient";
 
-function decodeJwtPayload(token: string): any {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join(""),
-    );
-    return JSON.parse(jsonPayload);
-  } catch {
-    return null;
+function pickText(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
   }
-}
-
-function normalizeIdentity(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim().toLowerCase();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function toLocalPart(value: string): string {
-  return value.split("@")[0];
-}
-
-function getIdentityCandidates(decoded: any): string[] {
-  const raw = [
-    decoded?.sub,
-    decoded?.email,
-    decoded?.preferred_username,
-    decoded?.username,
-    decoded?.name,
-    decoded?.userId,
-    decoded?.id,
-  ];
-
-  const normalized = raw
-    .map((v) => normalizeIdentity(v))
-    .filter((v): v is string => Boolean(v));
-
-  return Array.from(new Set(normalized));
-}
-
-function getMemberIdentityCandidates(member: any): string[] {
-  const raw = [
-    member?.id,
-    member?.email,
-    member?.username,
-    member?.userName,
-    member?.name,
-    member?.user?.id,
-    member?.user?.email,
-    member?.user?.username,
-    member?.user?.name,
-  ];
-
-  return raw
-    .map((v) => normalizeIdentity(v))
-    .filter((v): v is string => Boolean(v));
-}
-
-function findCurrentMember(members: any[], decoded: any): any | null {
-  const tokenCandidates = getIdentityCandidates(decoded);
-  if (tokenCandidates.length === 0) return null;
-
-  const exact = members.find((member: any) => {
-    const memberCandidates = getMemberIdentityCandidates(member);
-    return tokenCandidates.some((tokenValue) => memberCandidates.includes(tokenValue));
-  });
-  if (exact) return exact;
-
-  const relaxedTokenValues = tokenCandidates.map(toLocalPart);
-  const relaxed = members.find((member: any) => {
-    const memberCandidates = getMemberIdentityCandidates(member).map(toLocalPart);
-    return relaxedTokenValues.some((tokenValue) => memberCandidates.includes(tokenValue));
-  });
-
-  return relaxed ?? null;
+  return "";
 }
 
 /**
- * Sources all information from /households/me as requested.
- * Consolidated source of truth for user profile, household members, and appliances.
+ * User identity comes from /users/me.
+ * Household context comes from /households/me.
  */
 async function getCurrentUser(): Promise<{
   userId: string;
@@ -100,34 +27,34 @@ async function getCurrentUser(): Promise<{
   householdData?: any;
 } | null> {
   try {
-    const token = await AsyncStorage.getItem("userToken");
-    if (!token) return null;
-
-    const decoded = decodeJwtPayload(token);
-    if (!decoded) return null;
-
-    // Use /households/me as the primary source
-    const res = await apiClient.get("/households/me");
-    const hData = res.data;
-
-    if (!hData || !hData.members) return null;
-
-    const me = findCurrentMember(hData.members, decoded);
+    const userRes = await apiClient.get("/users/me");
+    const me = userRes.data;
     if (!me) {
-      console.error("❌ Could not map JWT to a household member");
+      console.error("Error fetching /users/me: empty payload");
       return null;
     }
 
+    let householdData: any = null;
+    try {
+      const householdRes = await apiClient.get("/households/me");
+      householdData = householdRes.data;
+    } catch (householdError: any) {
+      console.error("Error fetching /households/me:", householdError?.message);
+    }
+
+    const userAllergens =
+      me.allergens || me.userAllergens || me.allergyProfiles || [];
+
     return {
-      userId: me.id,
-      householdId: hData.id,
-      name: me.name || "",
-      email: me.email || "",
-      allergens: me.allergens || [],
-      householdData: hData,
+      userId: pickText(me.id, me.userId, me.user_id),
+      householdId: pickText(me.householdId, me.household_id, householdData?.id),
+      name: pickText(me.name, me.username, me.userName),
+      email: pickText(me.email),
+      allergens: userAllergens,
+      householdData,
     };
   } catch (e: any) {
-    console.error("❌ Error fetching /households/me:", e?.message);
+    console.error("Error fetching /users/me:", e?.message);
     return null;
   }
 }
@@ -160,7 +87,7 @@ export interface BackendAllergen {
 // ═══════════════════════════════════════════════════════════════════════════════
 export const profileService = {
   /**
-   * Fetch full profile from the API using consolidated /households/me endpoint
+   * Fetch full profile from /users/me + /households/me
    */
   get: async (): Promise<UserProfile> => {
     const empty: UserProfile = {

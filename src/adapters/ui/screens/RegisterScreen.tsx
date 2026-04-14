@@ -79,7 +79,7 @@ const APPLIANCE_OPTIONS = [
   { id: 'VITROCERAMICA', name: 'Vitrocerámica' },
   { id: 'ROBOT_COCINA', name: 'Robot de Cocina' },
   { id: 'BATIDORA', name: 'Batidora' },
-  { id: 'SARTEN', name: 'Sartén' },
+  { id: 'SARTEN', name: 'Sarten' },
 ];
 
 // ─── Step indicator ────────────────────────────────────────────────────────────
@@ -146,18 +146,17 @@ function ToggleChip({
         selected && styles.chipSelected,
       ]}
     >
-      {selected && <View style={styles.chipSelectedAccent} />}
       <View style={[styles.chipIconWrap, selected && styles.chipIconWrapSelected]}>
         <Icon
           size={14}
-          color={selected ? COLORS.white : COLORS.primary}
+          color={selected ? COLORS.primary : DARK_GREEN}
           strokeWidth={2.4}
         />
       </View>
       <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>{label}</Text>
       {selected && (
         <View style={styles.chipCheck}>
-          <Check size={12} color={COLORS.white} strokeWidth={3} />
+          <Check size={12} color={COLORS.primary} strokeWidth={3} />
         </View>
       )}
     </TouchableOpacity>
@@ -555,16 +554,23 @@ const RegisterScreen: React.FC = () => {
               )}
 
               {step === 2 && (
-                <View>
+                <View style={styles.stepPanel}>
+                  <View style={styles.panelHeaderRow}>
+                    <View style={styles.panelBadge}>
+                      <ShieldAlert size={14} color={COLORS.primary} strokeWidth={2.7} />
+                      <Text style={styles.panelBadgeText}>Alergenos</Text>
+                    </View>
+                    <Text style={styles.panelCounter}>{selectedAllergens.length} seleccionados</Text>
+                  </View>
                   {allergensLoading ? (
                     <View style={styles.loadingWrap}>
                       <ActivityIndicator size="large" color={COLORS.primary} />
-                      <Text style={styles.loadingText}>Cargando alérgenos…</Text>
+                      <Text style={styles.loadingText}>Cargando alergenos...</Text>
                     </View>
                   ) : (
                     <>
-                      <Text style={styles.sectionNote}>
-                        Selecciona los alérgenos que apliquen a tu hogar. Puedes cambiarlos después.
+                      <Text style={styles.panelLead}>
+                        Marcalos para que las recetas nazcan ya filtradas para tu hogar.
                       </Text>
                       <View style={styles.chipGrid}>
                         {allergenOptions.map(a => (
@@ -582,7 +588,7 @@ const RegisterScreen: React.FC = () => {
                         <View style={styles.infoCard}>
                           <ShieldAlert size={18} color={COLORS.primary} strokeWidth={2.4} />
                           <Text style={styles.infoText}>
-                            No se encontraron alérgenos en el sistema. Puedes añadirlos más tarde desde tu perfil.
+                            No se encontraron alergenos en el sistema. Puedes anadirlos mas tarde desde tu perfil.
                           </Text>
                         </View>
                       )}
@@ -592,9 +598,16 @@ const RegisterScreen: React.FC = () => {
               )}
 
               {step === 3 && (
-                <View>
-                  <Text style={styles.sectionNote}>
-                    Selecciona los electrodomésticos que tienes en casa para adaptar tus recetas.
+                <View style={[styles.stepPanel, styles.stepPanelAppliances]}>
+                  <View style={styles.panelHeaderRow}>
+                    <View style={styles.panelBadge}>
+                      <UtensilsCrossed size={14} color={COLORS.primary} strokeWidth={2.7} />
+                      <Text style={styles.panelBadgeText}>Estacion de cocina</Text>
+                    </View>
+                    <Text style={styles.panelCounter}>{selectedAppliances.length} seleccionados</Text>
+                  </View>
+                  <Text style={styles.panelLead}>
+                    Elegi tus herramientas reales y la IA va a proponer recetas que SI podes cocinar.
                   </Text>
                   <View style={styles.chipGrid}>
                     {APPLIANCE_OPTIONS.map(a => (
@@ -607,6 +620,12 @@ const RegisterScreen: React.FC = () => {
                         accessibilityHint={`Toca para ${selectedAppliances.includes(a.id) ? 'desactivar' : 'activar'} ${a.name}`}
                       />
                     ))}
+                  </View>
+                  <View style={styles.panelHintCard}>
+                    <Sparkles size={14} color={COLORS.accent} strokeWidth={2.6} />
+                    <Text style={styles.panelHintText}>
+                      Cuanto mas preciso sea este paso, mas utiles van a ser tus recetas sugeridas.
+                    </Text>
                   </View>
                 </View>
               )}
@@ -768,6 +787,62 @@ const styles = StyleSheet.create({
 
   // Step content
   stepContent: { minHeight: 200 },
+  stepPanel: {
+    backgroundColor: COLORS.white,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 1.5,
+    borderColor: '#d9ebdf',
+    ...SHADOW_SM,
+  },
+  stepPanelAppliances: {
+    borderColor: COLORS.primary + '33',
+    backgroundColor: '#F8FDF9',
+  },
+  panelHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 8,
+  },
+  panelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary + '12',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+  },
+  panelBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: DARK_GREEN,
+    letterSpacing: 0.4,
+  },
+  panelCounter: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+    backgroundColor: COLORS.primary + '12',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '33',
+  },
+  panelLead: {
+    fontSize: 13,
+    color: DARK_GREEN,
+    opacity: 0.68,
+    lineHeight: 19,
+    marginBottom: 16,
+    fontWeight: '600',
+  },
 
   // Field styles (for step 1 & beyond)
   fieldLabel: {
@@ -858,37 +933,30 @@ const styles = StyleSheet.create({
   // Chip grid
   chipGrid: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 10,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 16, paddingVertical: 12,
+    width: '48%',
+    paddingHorizontal: 12, paddingVertical: 12,
     borderRadius: 14, backgroundColor: CARD_BG,
     borderWidth: 1.5, borderColor: COLORS.text + '15',
     overflow: 'hidden',
     ...SHADOW_SM,
   },
   chipSelected: {
-    backgroundColor: MID_GREEN,
-    borderColor: DARK_GREEN,
-    transform: [{ translateY: -1 }],
+    backgroundColor: '#ECF8F0',
+    borderColor: '#ECF8F0',
+    transform: [{ translateY: 0 }],
     ...Platform.select({
       ios: {
-        shadowColor: MID_GREEN,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.28,
-        shadowRadius: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
       },
-      android: { elevation: 7 },
+      android: { elevation: 1 },
     }),
-  },
-  chipSelectedAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: ICE_BLUE,
   },
   chipIconWrap: {
     width: 24,
@@ -899,21 +967,41 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary + '14',
   },
   chipIconWrapSelected: {
-    backgroundColor: ICE_BLUE,
+    backgroundColor: COLORS.primary + '1F',
   },
   chipLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  chipLabelSelected: { color: COLORS.white },
+  chipLabelSelected: { color: DARK_GREEN },
   chipCheck: {
     width: 20, height: 20, borderRadius: 10,
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.primary + '20',
     borderWidth: 1,
-    borderColor: COLORS.white + '44',
+    borderColor: COLORS.primary + '55',
     justifyContent: 'center', alignItems: 'center',
   },
 
   // Loading
   loadingWrap: { alignItems: 'center', paddingVertical: 40, gap: 12 },
   loadingText: { fontSize: 14, color: COLORS.text, opacity: 0.5, fontWeight: '600' },
+  panelHintCard: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: COLORS.accent + '14',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '33',
+  },
+  panelHintText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: DARK_GREEN,
+    opacity: 0.72,
+    fontWeight: '600',
+  },
 
   // Action row
   actionRow: { marginTop: 28 },

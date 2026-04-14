@@ -2,15 +2,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { apiClient } from './apiClient';
 
-export const setupInterceptors = (logout: () => void) => {
-  
+export const setupInterceptors = (_logout: () => void) => {
   apiClient.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
       const token = await AsyncStorage.getItem('userToken');
-      
-      if (token && config.headers) {
+
+      if (!config.headers) {
+        config.headers = {} as InternalAxiosRequestConfig['headers'];
+      }
+
+      if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+
+      const isMeRoute = typeof config.url === 'string' && config.url.includes('/me');
+      if (isMeRoute && !token) {
+        return Promise.reject(new Error('Missing auth token for /me endpoint'));
+      }
+
       return config;
     },
     (error) => Promise.reject(error)
@@ -18,12 +27,6 @@ export const setupInterceptors = (logout: () => void) => {
 
   apiClient.interceptors.response.use(
     (response: AxiosResponse) => response,
-    async (error) => {
-      if (error.response && error.response.status === 401) {
-        await AsyncStorage.removeItem('userToken');
-        logout(); 
-      }
-      return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
   );
 };

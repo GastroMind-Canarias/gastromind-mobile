@@ -7,6 +7,7 @@ import {
   FlatList,
   Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -32,6 +33,7 @@ import {
 import { FridgeItem, ItemStatus } from '../../../core/domain/fridgeItem.types';
 import { COLORS } from '../../../shared/theme/colors';
 import { fridgeService } from '../../external/api/FridgeService';
+import { apiClient } from '../../external/api/apiClient';
 import { AppBottomSheet } from '../components/AppBottomSheet';
 import { AppDialog, type AppDialogAction } from '../components/AppDialog';
 
@@ -64,6 +66,13 @@ const STATUS_CONFIG: Record<
     bg: COLORS.error + '22',
   },
 };
+
+async function getUserIdFromMe(): Promise<string> {
+  const response = await apiClient.get('/users/me');
+  const data = response?.data;
+  const id = data?.id || data?.userId || data?.user_id;
+  return typeof id === 'string' ? id : '';
+}
 
 function getExpiryMeta(expirationDate: string, status: ItemStatus) {
   if (status === ItemStatus.EXPIRED) {
@@ -200,8 +209,19 @@ function ItemCard({
 }
 
 // ─── Ticket modal ─────────────────────────────────────────────────────────────
-function TicketModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function TicketModal({
+  visible,
+  onClose,
+  userId,
+  onImported,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  userId: string;
+  onImported: () => Promise<void>;
+}) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [storeId, setStoreId] = useState('');
   const [dialog, setDialog] = useState<{
     title: string;
     message: string;
@@ -226,6 +246,15 @@ function TicketModal({ visible, onClose }: { visible: boolean; onClose: () => vo
 
   const handlePickImage = async (useCamera: boolean) => {
     try {
+      if (!userId) {
+        showDialog({
+          title: 'Usuario no disponible',
+          message: 'No pudimos identificar tu usuario. Cerrá sesión y volvé a entrar.',
+          variant: 'danger',
+        });
+        return;
+      }
+
       let result;
       if (useCamera) {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -258,20 +287,75 @@ function TicketModal({ visible, onClose }: { visible: boolean; onClose: () => vo
       }
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        // Simulación de procesamiento IA / OCR
+        const selected = result.assets[0];
+        if (!selected?.uri) return;
+
         setIsProcessing(true);
-        
-        // Simulamos un retraso de procesamiento de 2.5 segundos
-        setTimeout(() => {
+
+        try {
+          const formData = new FormData();
+          const fileName = selected.fileName || `ticket-${Date.now()}.jpg`;
+          const fileType = selected.mimeType || 'image/jpeg';
+
+          formData.append('image', {
+            uri: selected.uri,
+            name: fileName,
+            type: fileType,
+          } as any);
+          formData.append('user_id', userId);
+
+          const trimmedStoreId = storeId.trim();
+          if (trimmedStoreId.length > 0) {
+            formData.append('store_id', trimmedStoreId);
+          }
+
+          const response = await apiClient.post('/tickets/from-image', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          await onImported();
+
+          const createdCount =
+            response?.data?.created_items_count ??
+            response?.data?.items_count ??
+            response?.data?.products_count ??
+            response?.data?.items?.length ??
+            response?.data?.products?.length;
+
+          const successMessage =
+            typeof createdCount === 'number'
+              ? `Ticket procesado correctamente. Se añadieron ${createdCount} producto${createdCount === 1 ? '' : 's'} a tu nevera.`
+              : 'Ticket procesado correctamente. Revisá tu nevera para ver los productos añadidos.';
+
           setIsProcessing(false);
           showDialog({
             title: 'Ticket procesado',
-            message:
-              'GastroMind ha analizado el ticket y ha encontrado 3 productos nuevos. Se han añadido a tu nevera.',
+            message: successMessage,
             variant: 'success',
-            actions: [{ label: 'Genial', onPress: onClose }],
+            actions: [
+              {
+                label: 'Genial',
+                onPress: () => {
+                  setStoreId('');
+                  onClose();
+                },
+              },
+            ],
           });
-        }, 2500);
+
+        } catch (error: any) {
+          console.error('Error processing ticket:', error);
+          setIsProcessing(false);
+          showDialog({
+            title: 'No se pudo procesar el ticket',
+            message:
+              error?.response?.data?.message ||
+              'No pudimos leer la imagen. Probá con una foto más nítida o con mejor luz.',
+            variant: 'danger',
+          });
+        }
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -312,6 +396,17 @@ function TicketModal({ visible, onClose }: { visible: boolean; onClose: () => vo
                 <Text style={styles.ticketPH_Sub}>
                   Haz una foto a tu ticket y GastroMind añadirá los productos automáticamente a tu nevera.
                 </Text>
+
+                <Text style={styles.fieldLabel}>Store ID (opcional)</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={storeId}
+                  onChangeText={setStoreId}
+                  placeholder="Ej. market-001"
+                  placeholderTextColor={COLORS.text + '44'}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
                 
                 <TouchableOpacity 
                   style={styles.ticketCameraBtn} 
@@ -438,6 +533,7 @@ function ItemFormModal({
 export default function FridgeApp() {
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<FridgeItem[]>([]);
+  const [ticketUserId, setTicketUserId] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showTicket, setShowTicket] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -472,11 +568,33 @@ export default function FridgeApp() {
   };
 
   useEffect(() => {
-    refresh();
+    loadInitialData();
     Animated.timing(fadeAnim, {
       toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true,
     }).start();
   }, []);
+
+  const loadInitialData = async () => {
+    await refresh();
+    await refreshTicketUserId();
+  };
+
+  const refreshTicketUserId = async () => {
+    try {
+      const id = await getUserIdFromMe();
+      setTicketUserId(id);
+    } catch (error) {
+      console.error('Error fetching /users/me user id:', error);
+      setTicketUserId('');
+    }
+  };
+
+  const openTicketModal = async () => {
+    if (!ticketUserId) {
+      await refreshTicketUserId();
+    }
+    setShowTicket(true);
+  };
 
   const refresh = async () => {
     const data = await fridgeService.getAll();
@@ -551,11 +669,21 @@ export default function FridgeApp() {
 
   return (
     <View style={styles.root}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={FRIDGE_DARK}
+        translucent={false}
+      />
       <View style={styles.ambientOrbA} />
       <View style={styles.ambientOrbB} />
 
       {/* ══ FRIDGE PANEL HEADER ══ */}
-      <View style={styles.fridgeHeader}>
+      <View
+        style={[
+          styles.fridgeHeader,
+          { paddingTop: Math.max(insets.top + 12, Platform.OS === 'ios' ? 58 : 44) },
+        ]}
+      >
         {/* Top bar */}
         <View style={styles.fridgeTopBar}>
           <View style={styles.fridgeTopBarLeft}>
@@ -580,7 +708,7 @@ export default function FridgeApp() {
         {/* Action buttons */}
         <View style={styles.headerActions}>
           {/* Ticket button */}
-          <TouchableOpacity style={styles.ticketBtn} onPress={() => setShowTicket(true)}>
+          <TouchableOpacity style={styles.ticketBtn} onPress={openTicketModal}>
             <Ticket size={15} color={ICE_BLUE} strokeWidth={2.5} />
             <Text style={styles.ticketBtnText}>Importar ticket</Text>
           </TouchableOpacity>
@@ -703,7 +831,12 @@ export default function FridgeApp() {
         setExpDate={setExpDate} setStatus={setStatus}
         onSave={handleSave} onClose={() => setShowForm(false)}
       />
-      <TicketModal visible={showTicket} onClose={() => setShowTicket(false)} />
+      <TicketModal
+        visible={showTicket}
+        onClose={() => setShowTicket(false)}
+        userId={ticketUserId}
+        onImported={refresh}
+      />
       <AppDialog
         visible={!!dialog}
         title={dialog?.title ?? ''}
@@ -754,7 +887,6 @@ const styles = StyleSheet.create({
   // ── Fridge Header (top panel)
   fridgeHeader: {
     backgroundColor: FRIDGE_DARK,
-    paddingTop: Platform.OS === 'ios' ? 58 : 44,
     paddingHorizontal: 22,
     paddingBottom: 22,
     borderBottomLeftRadius: 34,

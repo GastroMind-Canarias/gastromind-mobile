@@ -29,6 +29,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   KitchenTool,
   UserProfile,
@@ -313,6 +314,7 @@ function AllergenPillBackend({
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
   const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [profile, setProfile] = useState<UserProfile>({
     id: "",
@@ -645,15 +647,31 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={DARK_GREEN}
+        translucent={false}
+      />
       <ScrollView
-        contentContainerStyle={styles.pageScroll}
+        contentContainerStyle={[
+          styles.pageScroll,
+          {
+            paddingTop: insets.top + 8,
+            paddingBottom: Math.max(110, insets.bottom + 90),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topBand}>
           <View style={styles.topBandGlow} />
+          <View style={styles.topBandGlowSecondary} />
+          <View style={styles.topBandAccentSlash} />
           <View style={styles.topBandHeader}>
             <View>
+              <View style={styles.topBandBadge}>
+                <Sparkles size={11} color={COLORS.accent} strokeWidth={2.6} />
+                <Text style={styles.topBandBadgeText}>Zona personal</Text>
+              </View>
               <Text style={styles.topBandTitle}>Perfil</Text>
               <Text style={styles.topBandSub}>Gestiona tu hogar y preferencias</Text>
             </View>
@@ -688,6 +706,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.identityPanel}>
+          <View style={styles.identityPanelGlow} />
           <View style={styles.profileInfo}>
             <View style={styles.avatarRing}>
               <Avatar name={profile.name || "?"} size={72} />
@@ -1053,18 +1072,18 @@ const SHADOW_PRIMARY = Platform.select({
 });
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#E9F5EE" },
+  root: { flex: 1, backgroundColor: COLORS.background },
 
   pageScroll: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 110,
     gap: 14,
   },
 
   topBand: {
     backgroundColor: DARK_GREEN,
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "28",
     padding: 16,
     overflow: "hidden",
     ...SHADOW_MD,
@@ -1078,11 +1097,49 @@ const styles = StyleSheet.create({
     top: -70,
     right: -40,
   },
+  topBandGlowSecondary: {
+    position: "absolute",
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: COLORS.secondary + "16",
+    bottom: -130,
+    left: -95,
+  },
+  topBandAccentSlash: {
+    position: "absolute",
+    width: 120,
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: COLORS.accent + "70",
+    right: -24,
+    top: 26,
+    transform: [{ rotate: "-24deg" }],
+  },
   topBandHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: 14,
+  },
+  topBandBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: COLORS.white + "14",
+    borderColor: COLORS.accent + "60",
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 8,
+  },
+  topBandBadgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.4,
   },
   topBandTitle: {
     fontSize: 22,
@@ -1120,13 +1177,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     borderRadius: 14,
-    backgroundColor: COLORS.primary,
+    backgroundColor: MID_GREEN,
     borderWidth: 1,
     borderColor: COLORS.primary,
     ...SHADOW_PRIMARY,
   },
   topBandEditBtnActive: {
-    backgroundColor: MID_GREEN,
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
   topBandEditText: {
@@ -1136,10 +1193,23 @@ const styles = StyleSheet.create({
   },
 
   identityPanel: {
+    position: "relative",
+    overflow: "hidden",
     backgroundColor: COLORS.white,
     borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "24",
     padding: 16,
     ...SHADOW_SM,
+  },
+  identityPanelGlow: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: COLORS.secondary + "1C",
+    right: -90,
+    top: -96,
   },
   identityTextBlock: { flex: 1 },
   identityMetaRow: { flexDirection: "row", gap: 8, marginTop: 10 },
@@ -1174,9 +1244,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: COLORS.primary,
+    backgroundColor: DARK_GREEN,
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: DARK_GREEN,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
@@ -1184,8 +1254,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   quickActionBtnSecondary: {
-    backgroundColor: COLORS.white,
-    borderColor: COLORS.primary + "44",
+    backgroundColor: COLORS.primary + "12",
+    borderColor: COLORS.primary + "55",
   },
   quickActionText: {
     color: COLORS.white,
@@ -1528,6 +1598,8 @@ const styles = StyleSheet.create({
   section: {
     backgroundColor: COLORS.white,
     borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "20",
     padding: 18,
     marginBottom: 16,
     ...SHADOW_SM,
@@ -1538,7 +1610,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 6,
   },
-  sectionTitleWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sectionTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: COLORS.primary + "10",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "2A",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
   sectionTitle: { fontSize: 17, fontWeight: "800", color: COLORS.text },
   sectionBadge: {
     backgroundColor: COLORS.primary + "20",

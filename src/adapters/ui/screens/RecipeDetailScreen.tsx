@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   Image,
@@ -15,6 +16,7 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, ChefHat, Clock3, Flame, Heart, UtensilsCrossed } from 'lucide-react-native';
 import { AppStackParamList } from '../navigation/types';
 import { COLORS } from '../../../shared/theme/colors';
+import { favoriteService } from '../../external/api/FavoriteService';
 
 // ─── Constantes de tema ─────────────────────
 const DARK_GREEN = '#0D1F17';
@@ -30,13 +32,58 @@ const RecipeDetailScreen: React.FC = () => {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteId, setFavoriteId] = useState<string | null>(null);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+
+  const syncFavoriteState = useCallback(async () => {
+    try {
+      const favorite = await favoriteService.findMineByRecipeId(recipe.id);
+      setIsFavorite(Boolean(favorite));
+      setFavoriteId(favorite?.id ?? null);
+    } catch {
+      setIsFavorite(false);
+      setFavoriteId(null);
+    }
+  }, [recipe.id]);
 
   useEffect(() => {
+    syncFavoriteState();
+
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
-  }, [fadeAnim, slideAnim]);
+  }, [fadeAnim, slideAnim, syncFavoriteState]);
+
+  const handleToggleFavorite = async () => {
+    if (favoriteLoading) return;
+
+    setFavoriteLoading(true);
+    try {
+      if (isFavorite && favoriteId) {
+        await favoriteService.deleteMine(favoriteId);
+        setIsFavorite(false);
+        setFavoriteId(null);
+      } else {
+        const created = await favoriteService.addMineByRecipeId(recipe.id);
+        if (created) {
+          setIsFavorite(true);
+          setFavoriteId(created.id);
+        } else {
+          await syncFavoriteState();
+        }
+      }
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        'No se pudo actualizar favoritos.';
+      Alert.alert('Ups', message);
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -51,8 +98,18 @@ const RecipeDetailScreen: React.FC = () => {
               <ArrowLeft size={20} color={DARK_GREEN} strokeWidth={2.8} />
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.bookmarkButton}>
-              <Heart size={18} color={COLORS.error} fill={COLORS.error} strokeWidth={2.2} />
+            <TouchableOpacity
+              style={[styles.bookmarkButton, favoriteLoading && styles.bookmarkButtonDisabled]}
+              onPress={handleToggleFavorite}
+              disabled={favoriteLoading}
+              activeOpacity={0.85}
+            >
+              <Heart
+                size={18}
+                color={isFavorite ? COLORS.error : DARK_GREEN}
+                fill={isFavorite ? COLORS.error : 'transparent'}
+                strokeWidth={2.2}
+              />
             </TouchableOpacity>
           </SafeAreaView>
           
@@ -170,6 +227,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.9)',
     justifyContent: 'center', alignItems: 'center',
     ...SHADOW_SM,
+  },
+  bookmarkButtonDisabled: {
+    opacity: 0.6,
   },
 
   // Content

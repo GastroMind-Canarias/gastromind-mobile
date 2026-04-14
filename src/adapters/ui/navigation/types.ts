@@ -12,6 +12,7 @@ export type AuthNavigationProp = NativeStackNavigationProp<AuthStackParamList>;
 export type AppStackParamList = {
   Tabs: undefined;
   RecipeDetail: { recipe: Recipe };
+  AIChat: undefined;
 };
 
 export type AppNavigationProp = NativeStackNavigationProp<AppStackParamList>;

@@ -1,84 +1,40 @@
 import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { AppNavigationProp } from '../navigation/types';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   Image,
   Platform,
+  RefreshControl,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { ChefHat, Clock3, Flame, Heart } from 'lucide-react-native';
+import { ChefHat, Clock3, Flame, Heart, RefreshCw, Trash2 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
+import { favoriteService, UserFavorite } from '../../external/api/FavoriteService';
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = '#0D1F17';
 const MID_GREEN = '#1A3826';
 const ICE = '#C8F0DC';
 
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-const MOCK_RECIPES: Recipe[] = [
-  {
-    id: '1',
-    title: 'Ensalada César con Pollo',
-    instructions: 'Mezcla la lechuga con la salsa César, añade crutones, queso parmesano y tiras de pollo a la plancha.',
-    servings: 2,
-    prep_time: 15,
-    appliance_needed: 'Sartén',
-    difficulty: 'Fácil',
-    description: 'Una ensalada clásica, fresca y perfecta para una cena ligera.',
-    calories: 350,
-    image_url: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?auto=format&fit=crop&q=80&w=400',
-    created_at: '2026-03-08T10:00:00Z',
-  },
-  {
-    id: '2',
-    title: 'Salmón al Horno con Espárragos',
-    instructions: 'Condimenta el salmón con limón y eneldo. Hornea junto a los espárragos a 200°C por 15 min.',
-    servings: 2,
-    prep_time: 25,
-    appliance_needed: 'Horno',
-    difficulty: 'Media',
-    description: 'Plato saludable, alto en proteínas y omega 3, ideal para comer rápido y sano.',
-    calories: 420,
-    image_url: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&q=80&w=400',
-    created_at: '2026-03-07T12:30:00Z',
-  },
-  {
-    id: '3',
-    title: 'Smoothie de Frutos Rojos',
-    instructions: 'Licúa fresas, arándanos, plátano, espinaca y leche de almendras hasta obtener consistencia suave.',
-    servings: 1,
-    prep_time: 5,
-    appliance_needed: 'Licuadora',
-    difficulty: 'Fácil',
-    description: 'Carga de energía por la mañana, lleno de antioxidantes.',
-    calories: 210,
-    image_url: 'https://images.unsplash.com/photo-1553530666-ba11a7da3888?auto=format&fit=crop&q=80&w=400',
-    created_at: '2026-03-05T08:15:00Z',
-  },
-  {
-    id: '4',
-    title: 'Pasta al Pesto con Tomates Cherry',
-    instructions: 'Hierve la pasta. Encurte los tomates cherry y mézclalos con pesto fresco y queso parmesano.',
-    servings: 3,
-    prep_time: 20,
-    appliance_needed: 'Olla',
-    difficulty: 'Media',
-    description: 'Un manjar italiano sencillo, muy aromático y con un gran sabor a albahaca.',
-    calories: 550,
-    image_url: 'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&q=80&w=400',
-    created_at: '2026-03-06T19:00:00Z',
-  }
-];
-
 // ─── Componente Tarjeta de Receta ─────────────────────────────────────────────
-const RecipeCard: React.FC<{ recipe: Recipe; onPress: () => void }> = ({ recipe, onPress }) => {
+const RecipeCard: React.FC<{
+  favorite: UserFavorite;
+  onPress: () => void;
+  onRemove: () => void;
+}> = ({ favorite, onPress, onRemove }) => {
+  const { recipe } = favorite;
   const scale = useRef(new Animated.Value(1)).current;
   const pressIn = () => Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 60, bounciness: 0 }).start();
   const pressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
@@ -95,10 +51,13 @@ const RecipeCard: React.FC<{ recipe: Recipe; onPress: () => void }> = ({ recipe,
         {/* Imagen */}
         <Image style={styles.recipeImage} source={{ uri: recipe.image_url }} />
 
-        {/* Decorativo de guardado */}
         <View style={styles.bookmarkBadge}>
           <Heart size={16} color={COLORS.error} fill={COLORS.error} strokeWidth={2.3} />
         </View>
+
+        <TouchableOpacity style={styles.removeBadge} onPress={onRemove} activeOpacity={0.85}>
+          <Trash2 size={14} color={COLORS.white} strokeWidth={2.6} />
+        </TouchableOpacity>
 
         {/* Info */}
         <View style={styles.recipeInfo}>
@@ -130,10 +89,47 @@ const RecipeCard: React.FC<{ recipe: Recipe; onPress: () => void }> = ({ recipe,
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const FavoriteRecipesScreen: React.FC = () => {
   const navigation = useNavigation<AppNavigationProp>();
-  const [recipes] = useState<Recipe[]>(MOCK_RECIPES);
+  const insets = useSafeAreaInsets();
+  const [favorites, setFavorites] = useState<UserFavorite[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
+
+  const sortedFavorites = useMemo(
+    () =>
+      [...favorites].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ),
+    [favorites]
+  );
+
+  const fetchFavorites = useCallback(async (showLoader = false) => {
+    if (showLoader) setLoading(true);
+    setError(null);
+
+    try {
+      const list = await favoriteService.getMine();
+      setFavorites(list);
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        'No pudimos cargar tus favoritos por ahora.';
+      setError(message);
+    } finally {
+      if (showLoader) setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchFavorites(true);
+    }, [fetchFavorites])
+  );
 
   useEffect(() => {
     Animated.parallel([
@@ -142,10 +138,52 @@ const FavoriteRecipesScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchFavorites(false);
+  };
+
+  const handleDeleteFavorite = (favoriteId: string, recipeTitle: string) => {
+    Alert.alert(
+      'Quitar de favoritos',
+      `Vas a quitar "${recipeTitle}" de tu lista.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Quitar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await favoriteService.deleteMine(favoriteId);
+              setFavorites((prev) => prev.filter((item) => item.id !== favoriteId));
+            } catch (e: any) {
+              const message =
+                e?.response?.data?.message ||
+                e?.message ||
+                'No se pudo quitar la receta de favoritos.';
+              Alert.alert('Ups', message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingRoot}>
+        <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} translucent={false} />
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Cargando tus recetas favoritas...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} translucent={false} />
       {/* ══ HEADER PANEL ══ */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerTopBar}>
           <View style={styles.ledRow}>
             <View style={styles.led} />
@@ -156,32 +194,59 @@ const FavoriteRecipesScreen: React.FC = () => {
         <View style={styles.greetingRow}>
           <View style={styles.greetingText}>
             <Text style={styles.greetingName}>Recetas Favoritas</Text>
-            <Text style={styles.greetingSub}>{recipes.length} guardadas</Text>
+            <Text style={styles.greetingSub}>{sortedFavorites.length} guardadas</Text>
           </View>
+          <TouchableOpacity style={styles.reloadButton} onPress={() => fetchFavorites(false)} activeOpacity={0.85}>
+            <RefreshCw size={14} color={ICE} strokeWidth={2.5} />
+            <Text style={styles.reloadButtonText}>Actualizar</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       {/* ══ BODY ══ */}
-      <Animated.View style={[{ flex: 1, paddingBottom: 110 }, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <Animated.View
+        style={[
+          { flex: 1, paddingBottom: Math.max(110, insets.bottom + 90) },
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+        ]}
+      >
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
+          }
         >
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Platos Guardados</Text>
             <View style={styles.sectionLine} />
           </View>
 
+          {error && <Text style={styles.errorText}>{error}</Text>}
+
           <View style={styles.listContainer}>
-            {recipes.map((recipe) => (
-              <RecipeCard
-                key={recipe.id}
-                recipe={recipe}
-                onPress={() => {
-                  navigation.navigate('RecipeDetail', { recipe });
-                }}
-              />
-            ))}
+            {sortedFavorites.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <View style={styles.emptyIconWrap}>
+                  <Heart size={24} color={COLORS.error} strokeWidth={2.4} />
+                </View>
+                <Text style={styles.emptyTitle}>Todavia no tenes favoritos</Text>
+                <Text style={styles.emptySubtitle}>
+                  Genera recetas con IA o guarda una desde sugerencias para verla aca.
+                </Text>
+              </View>
+            ) : (
+              sortedFavorites.map((favorite) => (
+                <RecipeCard
+                  key={favorite.id}
+                  favorite={favorite}
+                  onPress={() => {
+                    navigation.navigate('RecipeDetail', { recipe: favorite.recipe as Recipe });
+                  }}
+                  onRemove={() => handleDeleteFavorite(favorite.id, favorite.recipe.title)}
+                />
+              ))
+            )}
           </View>
 
         </ScrollView>
@@ -201,13 +266,25 @@ const SHADOW_MD = Platform.select({
 });
 
 const styles = StyleSheet.create({
+  loadingRoot: {
+    flex: 1,
+    backgroundColor: '#E9F5EE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: DARK_GREEN,
+    opacity: 0.7,
+  },
   root: { flex: 1, backgroundColor: '#E9F5EE' },
 
   // ── Header
   header: {
     backgroundColor: DARK_GREEN,
     paddingHorizontal: 22,
-    paddingTop: Platform.OS === 'ios' ? 58 : 44,
     paddingBottom: 22,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
@@ -231,6 +308,22 @@ const styles = StyleSheet.create({
   greetingText: { flex: 1 },
   greetingSub: { color: ICE, fontSize: 14, fontWeight: '500', opacity: 0.65, marginTop: 4 },
   greetingName: { color: '#FFFFFF', fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
+  reloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: MID_GREEN,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: ICE + '44',
+  },
+  reloadButtonText: {
+    color: ICE,
+    fontSize: 12,
+    fontWeight: '700',
+  },
 
   // ── Scroll body
   scroll: { paddingHorizontal: 18, paddingTop: 20 },
@@ -242,6 +335,45 @@ const styles = StyleSheet.create({
 
   listContainer: {
     gap: 16,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  emptyCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 22,
+    paddingVertical: 28,
+    paddingHorizontal: 22,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0ECE5',
+    ...SHADOW_SM,
+  },
+  emptyIconWrap: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: COLORS.error + '14',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: DARK_GREEN,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: DARK_GREEN,
+    opacity: 0.55,
+    lineHeight: 19,
+    textAlign: 'center',
   },
 
   // ── Recipe Card
@@ -267,6 +399,19 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center', alignItems: 'center',
     ...SHADOW_SM,
+  },
+  removeBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    backgroundColor: DARK_GREEN + 'D9',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.white + '50',
   },
   recipeInfo: {
     padding: 18,

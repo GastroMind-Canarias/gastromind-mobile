@@ -2,6 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, Refrigerator, UserCircle2, Heart } from 'lucide-react-native';
 import React from 'react';
 import { Platform, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../../shared/theme/colors';
 import FridgeScreen from '../screens/FridgeScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -11,15 +12,19 @@ import FavoriteRecipesScreen from '../screens/FavoriteRecipesScreen';
 const Tab = createBottomTabNavigator();
 
 export const MainNavigator = () => {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 10 : 8);
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: '#8AA898',
         tabBarStyle: {
-          height: Platform.OS === 'ios' ? 84 : 68,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+          height: 56 + bottomInset,
+          paddingBottom: bottomInset,
           paddingTop: 8,
           borderTopLeftRadius: 28,
           borderTopRightRadius: 28,

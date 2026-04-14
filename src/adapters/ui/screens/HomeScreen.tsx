@@ -25,6 +25,7 @@ import {
   UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FridgeItem, ItemStatus } from "../../../core/domain/fridgeItem.types";
 import { COLORS } from "../../../shared/theme/colors";
 import { fridgeService } from "../../external/api/FridgeService";
@@ -157,6 +158,7 @@ function QuickCard({
 const HomeScreen: React.FC = () => {
   const { signOut } = useAuth();
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -191,6 +193,7 @@ const HomeScreen: React.FC = () => {
     ]).start();
   }, []);
 
+
   if (loadingProfile || !profile) {
     return (
       <View
@@ -217,9 +220,13 @@ const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={DARK_GREEN} />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={DARK_GREEN}
+        translucent={false}
+      />
       {/* ══ HEADER PANEL ══ */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         {/* Top bar */}
         <View style={styles.headerTopBar}>
           <View style={styles.ledRow}>
@@ -353,6 +360,7 @@ const HomeScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.recipeHeroBtn}
                 activeOpacity={0.85}
+                onPress={() => navigation.navigate("AIChat")}
               >
                 <ChefHat size={14} color={COLORS.white} strokeWidth={2.6} />
                 <Text style={styles.recipeHeroBtnText}>Generar receta</Text>
@@ -404,6 +412,7 @@ const HomeScreen: React.FC = () => {
           <View style={{ height: 100 }} />
         </ScrollView>
       </Animated.View>
+
     </View>
   );
 };
@@ -444,7 +453,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: DARK_GREEN,
     paddingHorizontal: 22,
-    paddingTop: Platform.OS === "ios" ? 58 : 44,
     paddingBottom: 22,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
