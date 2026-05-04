@@ -17,7 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { ChefHat, Clock3, Flame, Heart, RefreshCw, Trash2 } from 'lucide-react-native';
+import { ChefHat, Clock3, Flame, Heart, Trash2 } from 'lucide-react-native';
 import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
 import { useNetwork } from '../../../shared/network/NetworkProvider';
@@ -26,8 +26,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = '#0D1F17';
-const MID_GREEN = '#1A3826';
-const ICE = '#C8F0DC';
 
 // ─── Componente Tarjeta de Receta ─────────────────────────────────────────────
 const RecipeCard: React.FC<{
@@ -37,6 +35,12 @@ const RecipeCard: React.FC<{
   onRemove: () => void;
 }> = ({ favorite, isDark, onPress, onRemove }) => {
   const { recipe } = favorite;
+  const hasImage = typeof recipe.image_url === 'string' && recipe.image_url.trim().length > 0;
+  const cardDescription =
+    recipe.description && recipe.description !== 'Sin descripcion.'
+      ? recipe.description
+      : recipe.instructions;
+  const showCalories = Number.isFinite(recipe.calories) && recipe.calories > 0;
   const scale = useRef(new Animated.Value(1)).current;
   const pressIn = () => Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 60, bounciness: 0 }).start();
   const pressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
@@ -51,7 +55,14 @@ const RecipeCard: React.FC<{
         activeOpacity={0.9}
       >
         {/* Imagen */}
-        <Image style={styles.recipeImage} source={{ uri: recipe.image_url }} />
+        {hasImage ? (
+          <Image style={styles.recipeImage} source={{ uri: recipe.image_url }} />
+        ) : (
+          <View style={[styles.recipeImage, styles.recipeImageFallback, isDark && styles.recipeImageFallbackDark]}>
+            <ChefHat size={24} color={isDark ? COLORS.white : COLORS.primary} strokeWidth={2.4} />
+            <Text style={[styles.recipeImageFallbackText, isDark && { color: COLORS.white, opacity: 0.86 }]}>Sin imagen</Text>
+          </View>
+        )}
 
         <View style={styles.bookmarkBadge}>
           <Heart size={16} color={COLORS.error} fill={COLORS.error} strokeWidth={2.3} />
@@ -66,17 +77,19 @@ const RecipeCard: React.FC<{
           <View style={styles.recipeHeader}>
             <Text style={[styles.recipeTitle, isDark && { color: COLORS.white }]} numberOfLines={1}>{recipe.title}</Text>
           </View>
-          <Text style={[styles.recipeDesc, isDark && { color: COLORS.white, opacity: 0.78 }]} numberOfLines={2}>{recipe.description}</Text>
+          <Text style={[styles.recipeDesc, isDark && { color: COLORS.white, opacity: 0.78 }]} numberOfLines={2}>{cardDescription}</Text>
 
           <View style={styles.recipeStats}>
             <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
               <Clock3 size={12} color={isDark ? COLORS.white : DARK_GREEN} strokeWidth={2.4} />
               <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.prep_time}m</Text>
             </View>
-            <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
-              <Flame size={12} color={COLORS.accent} strokeWidth={2.4} />
-              <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.calories} kcal</Text>
-            </View>
+            {showCalories ? (
+              <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
+                <Flame size={12} color={COLORS.accent} strokeWidth={2.4} />
+                <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.calories} kcal</Text>
+              </View>
+            ) : null}
             <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
               <ChefHat size={12} color={COLORS.primary} strokeWidth={2.4} />
               <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.appliance_needed}</Text>
@@ -192,31 +205,10 @@ const FavoriteRecipesScreen: React.FC = () => {
   return (
     <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0C100D' : DARK_GREEN} translucent={false} />
-      {/* ══ HEADER PANEL ══ */}
-      <View style={[styles.header, isDark && { backgroundColor: '#11351A' }, { paddingTop: insets.top + 12 }]}> 
-        <View style={styles.headerTopBar}>
-          <View style={styles.ledRow}>
-            <View style={styles.led} />
-            <Text style={styles.headerEyebrow}>Tus Colecciones</Text>
-          </View>
-        </View>
-
-        <View style={styles.greetingRow}>
-          <View style={styles.greetingText}>
-            <Text style={styles.greetingName}>Recetas Favoritas</Text>
-            <Text style={styles.greetingSub}>{sortedFavorites.length} guardadas</Text>
-          </View>
-          <TouchableOpacity style={styles.reloadButton} onPress={() => fetchFavorites(false)} activeOpacity={0.85}>
-            <RefreshCw size={14} color={ICE} strokeWidth={2.5} />
-            <Text style={styles.reloadButtonText}>Actualizar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
       {/* ══ BODY ══ */}
       <Animated.View
         style={[
-          { flex: 1, paddingBottom: Math.max(110, insets.bottom + 90) },
+          { flex: 1, paddingTop: insets.top + 2, paddingBottom: Math.max(110, insets.bottom + 90) },
           { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
         ]}
       >
@@ -294,52 +286,8 @@ const styles = StyleSheet.create({
   },
   root: { flex: 1, backgroundColor: '#E9F5EE' },
 
-  // ── Header
-  header: {
-    backgroundColor: DARK_GREEN,
-    paddingHorizontal: 22,
-    paddingBottom: 22,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    ...SHADOW_MD,
-  },
-  headerTopBar: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 12,
-  },
-  ledRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  led: {
-    width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary,
-    ...Platform.select({
-      ios: { shadowColor: COLORS.primary, shadowOpacity: 0.9, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } },
-      android: { elevation: 2 },
-    }),
-  },
-  headerEyebrow: { color: ICE, fontSize: 14, fontWeight: '700', letterSpacing: 1, opacity: 0.8 },
-
-  greetingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  greetingText: { flex: 1 },
-  greetingSub: { color: ICE, fontSize: 14, fontWeight: '500', opacity: 0.65, marginTop: 4 },
-  greetingName: { color: '#FFFFFF', fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
-  reloadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: MID_GREEN,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: ICE + '44',
-  },
-  reloadButtonText: {
-    color: ICE,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
   // ── Scroll body
-  scroll: { paddingHorizontal: 18, paddingTop: 20 },
+  scroll: { paddingHorizontal: 18, paddingTop: 10 },
 
   // Section header
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 },
@@ -403,6 +351,24 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 160,
     backgroundColor: '#D1E6DA',
+  },
+  recipeImageFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EAF6EE',
+    borderBottomWidth: 1,
+    borderBottomColor: '#DDECE1',
+  },
+  recipeImageFallbackDark: {
+    backgroundColor: '#1A2E1F',
+    borderBottomColor: COLORS.secondary + '44',
+  },
+  recipeImageFallbackText: {
+    color: DARK_GREEN,
+    fontSize: 12,
+    fontWeight: '700',
+    opacity: 0.7,
   },
   bookmarkBadge: {
     position: 'absolute',

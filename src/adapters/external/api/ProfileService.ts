@@ -70,7 +70,19 @@ const APPLIANCE_TO_TOOL: Record<string, KitchenTool> = {
   ROBOT_COCINA: KitchenTool.ROBOT_COCINA,
   BATIDORA: KitchenTool.BATIDORA,
   SARTEN: KitchenTool.SARTEN,
+  SARTÉN: KitchenTool.SARTEN,
+  OLLA_EXPRESS: KitchenTool.SARTEN,
 };
+
+const TOOL_TO_APPLIANCE: Record<KitchenTool, string> = Object.entries(
+  APPLIANCE_TO_TOOL,
+).reduce(
+  (acc, [appliance, tool]) => {
+    acc[tool] = appliance;
+    return acc;
+  },
+  {} as Record<KitchenTool, string>,
+);
 
 const ALLERGEN_NAME_TO_ENUM: Record<string, Allergen> = {
   GLUTEN: Allergen.GLUTEN,
@@ -85,6 +97,101 @@ const ALLERGEN_NAME_TO_ENUM: Record<string, Allergen> = {
 export interface BackendAllergen {
   id: string;
   name: string;
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))];
+}
+
+function extractAllergenIds(allergens?: any[]): string[] {
+  if (!Array.isArray(allergens)) return [];
+  return unique(
+    allergens
+      .map((item) =>
+        pickText(
+          typeof item === "string" ? item : "",
+          item?.id,
+          item?.allergenId,
+          item?.allergen_id,
+        ),
+      )
+      .map((id) => id.trim()),
+  );
+}
+
+type RequestMethod = "post" | "put" | "patch";
+
+async function requestWithFallback(
+  attempts: Array<{ method: RequestMethod; url: string; data: any }>,
+): Promise<void> {
+  let lastError: any = null;
+
+  for (const attempt of attempts) {
+    try {
+      await apiClient.request({
+        method: attempt.method,
+        url: attempt.url,
+        data: attempt.data,
+      });
+      return;
+    } catch (error: any) {
+      lastError = error;
+      const status = error?.response?.status;
+      if (status !== 403 && status !== 404 && status !== 405) {
+        break;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+function logApiError(context: string, error: any): void {
+  console.error(context, {
+    status: error?.response?.status,
+    url: error?.config?.url,
+    method: error?.config?.method,
+    data: error?.response?.data,
+    message: error?.message,
+  });
+}
+
+async function updateMyAllergensBatch(allergenIds: string[]): Promise<void> {
+  const ids = unique(allergenIds);
+  const endpoint = "/users/me/allergens";
+  console.log("[ProfileDebug][UpdateAllergensBatch][Request]", {
+    endpoint,
+    allergenIdsCount: ids.length,
+    allergenIds: ids,
+  });
+
+  await apiClient.put(endpoint, {
+    allergenIds: ids,
+  });
+
+  console.log("[ProfileDebug][UpdateAllergensBatch][Success]", {
+    endpoint,
+    allergenIdsCount: ids.length,
+  });
+}
+
+async function updateMyAppliancesBatch(applianceTypes: string[]): Promise<void> {
+  const types = unique(
+    applianceTypes.map((item) => {
+      const normalized = item.toUpperCase();
+      return normalized === "SARTEN" || normalized === "SARTÉN"
+        ? "OLLA_EXPRESS"
+        : normalized;
+    }),
+  );
+  const payload = { appliances: types };
+  const attempts: Array<{ method: RequestMethod; url: string; data: any }> = [
+    { method: "post", url: "/households/me/appliances/batch", data: payload },
+    { method: "put", url: "/households/me/appliances/batch", data: payload },
+    { method: "patch", url: "/households/me/appliances/batch", data: payload },
+  ];
+
+  await requestWithFallback(attempts);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -130,7 +237,16 @@ export const profileService = {
       // Extract household appliances
       if (data.householdData?.appliances) {
         profile.kitchenTools = data.householdData.appliances
-          .map((a: string) => APPLIANCE_TO_TOOL[a.toUpperCase()])
+          .map((a: any) =>
+            APPLIANCE_TO_TOOL[
+              pickText(
+                typeof a === "string" ? a : "",
+                a?.appliance,
+                a?.name,
+                a?.type,
+              ).toUpperCase()
+            ],
+          )
           .filter(Boolean);
       }
 
@@ -170,33 +286,32 @@ export const profileService = {
    */
   toggleTool: async (tool: KitchenTool): Promise<void> => {
     const user = await getCurrentUser();
-    if (!user?.householdId) return;
+    if (!user) return;
 
-    const applianceKey = Object.entries(APPLIANCE_TO_TOOL).find(
-      ([, v]) => v === tool,
-    )?.[0];
+    const applianceKey = TOOL_TO_APPLIANCE[tool];
     if (!applianceKey) return;
 
     try {
-      // Check if already present in household data from the consolidated response
-      const existing = user.householdData?.appliances?.includes(applianceKey);
+      const currentAppliances = unique(
+        (user.householdData?.appliances || [])
+          .map((appliance: any) =>
+            pickText(
+              typeof appliance === "string" ? appliance : "",
+              appliance?.appliance,
+              appliance?.name,
+              appliance?.type,
+            ).toUpperCase(),
+          )
+          .filter(Boolean),
+      );
 
-      if (existing) {
-        // Find existing record to get its ID (we might still need a secondary call for deletion if ID is required)
-        // For simplicity, we fallback to a fetch if we don't have IDs for devices.
-        const appliancesRes = await apiClient.get(`/households/${user.householdId}/appliances`);
-        const item = appliancesRes.data.find((a: any) => a.appliance === applianceKey);
-        if (item) {
-          await apiClient.delete(`/households/appliances/${item.id}`);
-        }
-      } else {
-        // Add
-        await apiClient.post(
-          `/households/${user.householdId}/appliances?appliance=${applianceKey}`,
-        );
-      }
+      const updatedAppliances = currentAppliances.includes(applianceKey)
+        ? currentAppliances.filter((item) => item !== applianceKey)
+        : [...currentAppliances, applianceKey];
+
+      await updateMyAppliancesBatch(updatedAppliances);
     } catch (e) {
-      console.error("Error toggling tool:", e);
+      logApiError("Error toggling tool", e);
     }
   },
 
@@ -212,23 +327,50 @@ export const profileService = {
         (a: any) => a.name?.toUpperCase() === allergenName.toUpperCase(),
       );
 
-      if (exists) {
-        // Remove
-        await apiClient.delete(`/users/${user.userId}/allergens/${exists.id}`);
-      } else {
-        // Find allergen ID from all allergens
+      const existingIds = extractAllergenIds(user.allergens);
+      let allergenId = pickText(exists?.id, exists?.allergenId, exists?.allergen_id);
+
+      if (!allergenId) {
         const allRes = await apiClient.get("/allergens");
         const allergen = allRes.data.find(
           (a: any) => a.name?.toUpperCase() === allergenName.toUpperCase(),
         );
-        if (allergen) {
-          await apiClient.post(
-            `/users/${user.userId}/allergens/${allergen.id}`,
-          );
-        }
+        allergenId = pickText(allergen?.id, allergen?.allergenId, allergen?.allergen_id);
       }
+
+      if (!allergenId) return;
+
+      const updatedIds = existingIds.includes(allergenId)
+        ? existingIds.filter((id) => id !== allergenId)
+        : [...existingIds, allergenId];
+
+      await updateMyAllergensBatch(updatedIds);
     } catch (e) {
-      console.error("Error toggling allergen:", e);
+      logApiError("Error toggling allergen", e);
+    }
+  },
+
+  /**
+   * Update user allergens in batch
+   */
+  updateAllergensBatch: async (allergenIds: string[]): Promise<void> => {
+    try {
+      await updateMyAllergensBatch(allergenIds);
+    } catch (e) {
+      logApiError("Error updating allergens batch", e);
+      throw e;
+    }
+  },
+
+  /**
+   * Update household appliances in batch
+   */
+  updateAppliancesBatch: async (applianceTypes: string[]): Promise<void> => {
+    try {
+      await updateMyAppliancesBatch(applianceTypes);
+    } catch (e) {
+      logApiError("Error updating appliances batch", e);
+      throw e;
     }
   },
 
@@ -252,9 +394,13 @@ export const profileService = {
         allergen = created.data;
       }
 
-      await apiClient.post(`/users/${user.userId}/allergens/${allergen.id}`);
+      const existingIds = extractAllergenIds(user.allergens);
+      const allergenId = pickText(allergen?.id, allergen?.allergenId, allergen?.allergen_id);
+      if (!allergenId) return;
+
+      await updateMyAllergensBatch([...existingIds, allergenId]);
     } catch (e) {
-      console.error("Error adding custom allergen:", e);
+      logApiError("Error adding custom allergen", e);
     }
   },
 

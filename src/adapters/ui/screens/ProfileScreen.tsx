@@ -80,7 +80,7 @@ const TOOL_CONFIG: Record<
     tint: "#7E9EFF",
   },
   [KitchenTool.BATIDORA]: { icon: Sparkles, label: "Batidora", tint: "#6CC5B7" },
-  [KitchenTool.SARTEN]: { icon: UtensilsCrossed, label: "Sartén", tint: COLORS.primary },
+  [KitchenTool.SARTEN]: { icon: UtensilsCrossed, label: "Olla express", tint: COLORS.primary },
 };
 
 const ALLERGEN_ICONS: Record<string, LucideIcon> = {
@@ -342,7 +342,13 @@ export default function ProfileScreen() {
   const [allAllergens, setAllAllergens] = useState<BackendAllergen[]>([]);
   const [userAllergenNames, setUserAllergenNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditingTools, setIsEditingTools] = useState(false);
+  const [isEditingAllergens, setIsEditingAllergens] = useState(false);
+  const [draftKitchenTools, setDraftKitchenTools] = useState<KitchenTool[]>([]);
+  const [draftAllergenNames, setDraftAllergenNames] = useState<string[]>([]);
+  const [savingSection, setSavingSection] = useState<"tools" | "allergens" | null>(
+    null,
+  );
   const [showAddAllergen, setShowAddAllergen] = useState(false);
   const [newAllergenName, setNewAllergenName] = useState("");
   const [houseActionLoading, setHouseActionLoading] = useState<
@@ -392,7 +398,10 @@ export default function ProfileScreen() {
         ...profileData.allergens.map((a) => a.toString()),
         ...profileData.customAllergens,
       ];
-      setUserAllergenNames(names.map((n) => n.toUpperCase()));
+      const normalizedNames = names.map((n) => n.toUpperCase());
+      setUserAllergenNames(normalizedNames);
+      setDraftKitchenTools(profileData.kitchenTools);
+      setDraftAllergenNames(normalizedNames);
     } catch (e) {
       console.error("Error loading profile data:", e);
     } finally {
@@ -409,39 +418,118 @@ export default function ProfileScreen() {
         ...profileData.customAllergens.map((n) => n.toUpperCase()),
       ];
       setUserAllergenNames(names);
+
+      if (!isEditingTools) {
+        setDraftKitchenTools(profileData.kitchenTools);
+      }
+
+      if (!isEditingAllergens) {
+        setDraftAllergenNames(names);
+      }
     } catch (e) {
       console.error("Error refreshing profile:", e);
     }
   };
 
-  // ── Toggle tool (async) ──
-  const handleToggleTool = async (tool: KitchenTool) => {
-    // Optimistic update
-    const wasActive = profile.kitchenTools.includes(tool);
-    setProfile((prev) => ({
-      ...prev,
-      kitchenTools: wasActive
-        ? prev.kitchenTools.filter((t) => t !== tool)
-        : [...prev.kitchenTools, tool],
-    }));
-
-    await profileService.toggleTool(tool);
-    refresh();
+  const toggleToolDraft = (tool: KitchenTool) => {
+    setDraftKitchenTools((prev) =>
+      prev.includes(tool)
+        ? prev.filter((currentTool) => currentTool !== tool)
+        : [...prev, tool],
+    );
   };
 
-  // ── Toggle allergen (async) ──
-  const handleToggleAllergen = async (allergen: BackendAllergen) => {
-    const isActive = userAllergenNames.includes(allergen.name.toUpperCase());
-
-    // Optimistic update
-    setUserAllergenNames((prev) =>
-      isActive
-        ? prev.filter((n) => n !== allergen.name.toUpperCase())
-        : [...prev, allergen.name.toUpperCase()],
+  const toggleAllergenDraft = (allergen: BackendAllergen) => {
+    const nameKey = allergen.name.toUpperCase();
+    setDraftAllergenNames((prev) =>
+      prev.includes(nameKey)
+        ? prev.filter((name) => name !== nameKey)
+        : [...prev, nameKey],
     );
+  };
 
-    await profileService.toggleAllergen(allergen.name);
-    refresh();
+  const handleToggleToolsEditMode = async () => {
+    if (!isEditingTools) {
+      setDraftKitchenTools(profile.kitchenTools);
+      setIsEditingTools(true);
+      return;
+    }
+
+    setSavingSection("tools");
+    try {
+      await profileService.updateAppliancesBatch(draftKitchenTools);
+      setIsEditingTools(false);
+      showDialog({
+        title: "Utensilios actualizados",
+        message: "Tus cambios de utensilios se han guardado.",
+        variant: "success",
+      });
+
+      try {
+        await refresh();
+      } catch (refreshError) {
+        console.error("Error refreshing profile after saving appliances:", refreshError);
+      }
+    } catch (error) {
+      console.error("Error saving appliances:", error);
+      showDialog({
+        title: "Error",
+        message: "No se pudieron guardar los utensilios.",
+        variant: "danger",
+      });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const handleCancelToolsEdit = () => {
+    setDraftKitchenTools(profile.kitchenTools);
+    setIsEditingTools(false);
+  };
+
+  const handleToggleAllergensEditMode = async () => {
+    if (!isEditingAllergens) {
+      setDraftAllergenNames(userAllergenNames);
+      setIsEditingAllergens(true);
+      return;
+    }
+
+    const selectedAllergenIds = allAllergens
+      .filter((allergen) =>
+        draftAllergenNames.includes(allergen.name?.toUpperCase()),
+      )
+      .map((allergen) => allergen.id);
+
+    setSavingSection("allergens");
+    try {
+      await profileService.updateAllergensBatch(selectedAllergenIds);
+      setIsEditingAllergens(false);
+      showDialog({
+        title: "Alergenos actualizados",
+        message: "Tus cambios de alergias se han guardado.",
+        variant: "success",
+      });
+
+      try {
+        await refresh();
+      } catch (refreshError) {
+        console.error("Error refreshing profile after saving allergens:", refreshError);
+      }
+    } catch (error) {
+      console.error("Error saving allergens:", error);
+      showDialog({
+        title: "Error",
+        message: "No se pudieron guardar los alergenos.",
+        variant: "danger",
+      });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const handleCancelAllergensEdit = () => {
+    setDraftAllergenNames(userAllergenNames);
+    setIsEditingAllergens(false);
   };
 
   // ── Add custom allergen ──
@@ -627,11 +715,12 @@ export default function ProfileScreen() {
   };
 
   const toolList = Object.values(KitchenTool);
-  const activeToolCount = profile.kitchenTools.length;
-  const activeAllergenCount = userAllergenNames.length;
-  const editHelperText = isEditing
-    ? "Modo edicion activo: toca utensilios y alergias para actualizarlos."
-    : "Pulsa Editar perfil para modificar utensilios y alergias.";
+  const visibleTools = isEditingTools ? draftKitchenTools : profile.kitchenTools;
+  const visibleAllergenNames = isEditingAllergens
+    ? draftAllergenNames
+    : userAllergenNames;
+  const activeToolCount = visibleTools.length;
+  const activeAllergenCount = visibleAllergenNames.length;
 
   // ── Loading state ──
   if (loading) {
@@ -705,22 +794,11 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            onPress={() => setIsEditing((prev) => !prev)}
-            style={[
-              styles.topBandEditBtn,
-              isEditing && styles.topBandEditBtnActive,
-            ]}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: isEditing }}
-            accessibilityLabel={isEditing ? "Desactivar modo edicion" : "Activar modo edicion"}
-            accessibilityHint="Activa este modo para editar utensilios y alergias"
-          >
-            <UtensilsCrossed size={18} color={COLORS.white} strokeWidth={2.6} />
-            <Text style={styles.topBandEditText}>
-              {isEditing ? "Guardar cambios" : "Editar perfil"}
+          <View style={styles.editHintCardTopBand}>
+            <Text style={styles.editHintCardTopBandText}>
+              Edita utensilios y alergias por separado desde cada seccion.
             </Text>
-          </TouchableOpacity>
+          </View>
         </View>
 
         <View style={[styles.identityPanel, isDarkMode && styles.identityPanelDark]}>
@@ -812,9 +890,21 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
 
-        <View style={[styles.editHintCard, isEditing && styles.editHintCardActive]}>
-          <Text style={[styles.editHintText, isEditing && styles.editHintTextActive]}>
-            {editHelperText}
+        <View
+          style={[
+            styles.editHintCard,
+            (isEditingTools || isEditingAllergens) && styles.editHintCardActive,
+          ]}
+        >
+          <Text
+            style={[
+              styles.editHintText,
+              (isEditingTools || isEditingAllergens) && styles.editHintTextActive,
+            ]}
+          >
+            {isEditingTools || isEditingAllergens
+              ? "Toca las opciones para preparar el JSON y pulsa Guardar en esa seccion."
+              : "Pulsa Editar en cada seccion para preparar cambios antes de enviarlos."}
           </Text>
         </View>
 
@@ -903,14 +993,54 @@ export default function ProfileScreen() {
             tus recetas.
           </Text>
 
+          <View style={styles.sectionActionRow}>
+            <TouchableOpacity
+              onPress={handleToggleToolsEditMode}
+              disabled={savingSection !== null}
+              style={[
+                styles.sectionActionBtn,
+                styles.sectionActionBtnPrimary,
+                savingSection !== null && styles.sectionActionBtnDisabled,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isEditingTools ? "Guardar utensilios" : "Editar utensilios"
+              }
+            >
+              {savingSection === "tools" ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <Text style={styles.sectionActionBtnPrimaryText}>
+                  {isEditingTools ? "Guardar utensilios" : "Editar utensilios"}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {isEditingTools && (
+              <TouchableOpacity
+                onPress={handleCancelToolsEdit}
+                disabled={savingSection !== null}
+                style={[
+                  styles.sectionActionBtn,
+                  styles.sectionActionBtnSecondary,
+                  savingSection !== null && styles.sectionActionBtnDisabled,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Cancelar edicion de utensilios"
+              >
+                <Text style={styles.sectionActionBtnSecondaryText}>Cancelar</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <View style={styles.toolGrid}>
             {toolList.map((tool) => (
               <ToolPill
                 key={tool}
                 tool={tool}
-                active={profile.kitchenTools.includes(tool)}
-                onPress={isEditing ? () => handleToggleTool(tool) : undefined}
-                isEditing={isEditing}
+                active={visibleTools.includes(tool)}
+                onPress={isEditingTools ? () => toggleToolDraft(tool) : undefined}
+                isEditing={isEditingTools}
                 isDarkMode={isDarkMode}
               />
             ))}
@@ -941,23 +1071,65 @@ export default function ProfileScreen() {
             Marca los ingredientes que debes evitar.
           </Text>
 
+          <View style={styles.sectionActionRow}>
+            <TouchableOpacity
+              onPress={handleToggleAllergensEditMode}
+              disabled={savingSection !== null}
+              style={[
+                styles.sectionActionBtn,
+                styles.sectionActionBtnDanger,
+                savingSection !== null && styles.sectionActionBtnDisabled,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isEditingAllergens ? "Guardar alergenos" : "Editar alergenos"
+              }
+            >
+              {savingSection === "allergens" ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <Text style={styles.sectionActionBtnPrimaryText}>
+                  {isEditingAllergens ? "Guardar alergenos" : "Editar alergenos"}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {isEditingAllergens && (
+              <TouchableOpacity
+                onPress={handleCancelAllergensEdit}
+                disabled={savingSection !== null}
+                style={[
+                  styles.sectionActionBtn,
+                  styles.sectionActionBtnSecondary,
+                  savingSection !== null && styles.sectionActionBtnDisabled,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Cancelar edicion de alergenos"
+              >
+                <Text style={styles.sectionActionBtnSecondaryText}>Cancelar</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <View style={styles.toolGrid}>
             {allAllergens.map((allergen) => (
               <AllergenPillBackend
                 key={allergen.id}
                 allergen={allergen}
-                active={userAllergenNames.includes(
+                active={visibleAllergenNames.includes(
                   allergen.name?.toUpperCase(),
                 )}
                 onPress={
-                   isEditing ? () => handleToggleAllergen(allergen) : undefined
+                  isEditingAllergens
+                    ? () => toggleAllergenDraft(allergen)
+                    : undefined
                 }
-                isEditing={isEditing}
+                isEditing={isEditingAllergens}
                 isDarkMode={isDarkMode}
               />
             ))}
 
-            {isEditing && (
+            {isEditingAllergens && (
               <TouchableOpacity
                 style={[
                   styles.toolPill,
@@ -1234,6 +1406,22 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 15,
     fontWeight: "800",
+  },
+  editHintCardTopBand: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.white + "2E",
+    backgroundColor: COLORS.white + "14",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  editHintCardTopBandText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "600",
+    opacity: 0.9,
+    textAlign: "center",
   },
 
   identityPanel: {
@@ -1737,6 +1925,47 @@ const styles = StyleSheet.create({
   sectionSubDark: {
     color: COLORS.white,
     opacity: 0.72,
+  },
+  sectionActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 14,
+  },
+  sectionActionBtn: {
+    minHeight: 42,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  sectionActionBtnPrimary: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  sectionActionBtnDanger: {
+    flex: 1,
+    backgroundColor: COLORS.error,
+    borderColor: COLORS.error,
+  },
+  sectionActionBtnSecondary: {
+    backgroundColor: COLORS.white,
+    borderColor: COLORS.primary + "45",
+    minWidth: 110,
+  },
+  sectionActionBtnDisabled: {
+    opacity: 0.6,
+  },
+  sectionActionBtnPrimaryText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  sectionActionBtnSecondaryText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: "800",
   },
   houseActionRow: {
     flexDirection: "row",

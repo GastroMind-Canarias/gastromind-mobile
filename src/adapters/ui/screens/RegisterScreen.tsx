@@ -69,7 +69,7 @@ const APPLIANCE_ICONS: Record<string, LucideIcon> = {
   VITROCERAMICA: Zap,
   ROBOT_COCINA: Cpu,
   BATIDORA: RotateCw,
-  SARTEN: CookingPot,
+  OLLA_EXPRESS: CookingPot,
 };
 
 const APPLIANCE_OPTIONS = [
@@ -79,7 +79,7 @@ const APPLIANCE_OPTIONS = [
   { id: 'VITROCERAMICA', name: 'Vitrocerámica' },
   { id: 'ROBOT_COCINA', name: 'Robot de Cocina' },
   { id: 'BATIDORA', name: 'Batidora' },
-  { id: 'SARTEN', name: 'Sarten' },
+  { id: 'OLLA_EXPRESS', name: 'Olla express' },
 ];
 
 // ─── Step indicator ────────────────────────────────────────────────────────────

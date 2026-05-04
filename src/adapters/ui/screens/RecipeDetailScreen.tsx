@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ChefHat, Clock3, Flame, Heart, UtensilsCrossed } from 'lucide-react-native';
 import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
+import { useTheme } from '../../../shared/theme/ThemeProvider';
 import { favoriteService } from '../../external/api/FavoriteService';
 
 // ─── Constantes de tema ─────────────────────
@@ -23,13 +24,13 @@ const DARK_GREEN = '#0D1F17';
 
 const RecipeDetailScreen: React.FC = () => {
   const router = useRouter();
+  const { isDark, colors } = useTheme();
   const { recipe: recipeParam } = useLocalSearchParams<{ recipe: string }>();
 
   const recipe = useMemo((): Recipe | null => {
     const raw = Array.isArray(recipeParam) ? recipeParam[0] : recipeParam;
     if (!raw || typeof raw !== 'string') return null;
     try {
-      j
       return JSON.parse(raw) as Recipe;
     } catch {
       return null;
@@ -103,7 +104,7 @@ const RecipeDetailScreen: React.FC = () => {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}>
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
         {/* HERO IMAGE */}
         <View style={styles.imageContainer}>
@@ -134,42 +135,42 @@ const RecipeDetailScreen: React.FC = () => {
         </View>
 
         {/* CONTENT */}
-        <Animated.View style={[styles.contentContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <Animated.View style={[styles.contentContainer, isDark && { backgroundColor: '#0C100D' }, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
 
           <View style={styles.titleRow}>
             <View style={styles.difficultyBadge}>
               <Text style={styles.difficultyText}>{recipe.difficulty}</Text>
             </View>
-            <Text style={styles.title}>{recipe.title}</Text>
+            <Text style={[styles.title, isDark && { color: COLORS.white }]}>{recipe.title}</Text>
           </View>
 
-          <Text style={styles.description}>{recipe.description}</Text>
+          <Text style={[styles.description, isDark && { color: COLORS.white, opacity: 0.75 }]}>{recipe.description}</Text>
 
           {/* STATS */}
-          <View style={styles.statsRow}>
+          <View style={[styles.statsRow, isDark && { backgroundColor: '#11351A' }]}>
             <View style={styles.statBox}>
               <Clock3 size={18} color={COLORS.primary} strokeWidth={2.6} />
-              <Text style={styles.statValue}>{recipe.prep_time}m</Text>
-              <Text style={styles.statLabel}>Preparación</Text>
+              <Text style={[styles.statValue, isDark && { color: COLORS.white }]}>{recipe.prep_time}m</Text>
+              <Text style={[styles.statLabel, isDark && { color: COLORS.white, opacity: 0.7 }]}>Preparación</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
               <Flame size={18} color={COLORS.accent} strokeWidth={2.6} />
-              <Text style={styles.statValue}>{recipe.calories}</Text>
-              <Text style={styles.statLabel}>Calorías</Text>
+              <Text style={[styles.statValue, isDark && { color: COLORS.white }]}>{recipe.calories}</Text>
+              <Text style={[styles.statLabel, isDark && { color: COLORS.white, opacity: 0.7 }]}>Calorías</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
               <UtensilsCrossed size={18} color={COLORS.text} strokeWidth={2.6} />
-              <Text style={styles.statValue}>{recipe.servings}</Text>
-              <Text style={styles.statLabel}>Raciones</Text>
+              <Text style={[styles.statValue, isDark && { color: COLORS.white }]}>{recipe.servings}</Text>
+              <Text style={[styles.statLabel, isDark && { color: COLORS.white, opacity: 0.7 }]}>Raciones</Text>
             </View>
           </View>
 
           <View style={styles.infoPillContainer}>
-            <View style={styles.infoPill}>
+            <View style={[styles.infoPill, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
               <ChefHat size={14} color={COLORS.primary} strokeWidth={2.6} />
-              <Text style={styles.infoPillText}>Necesitas: <Text style={{ fontWeight: '800' }}>{recipe.appliance_needed}</Text></Text>
+              <Text style={[styles.infoPillText, isDark && { color: COLORS.white, opacity: 0.85 }]}>Necesitas: <Text style={{ fontWeight: '800' }}>{recipe.appliance_needed}</Text></Text>
             </View>
           </View>
 
@@ -177,12 +178,12 @@ const RecipeDetailScreen: React.FC = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <ChefHat size={14} color={DARK_GREEN} strokeWidth={2.6} />
-              <Text style={styles.sectionTitle}>Instrucciones</Text>
+              <Text style={[styles.sectionTitle, isDark && { color: COLORS.white, opacity: 0.75 }]}>Instrucciones</Text>
               <View style={styles.sectionLine} />
             </View>
 
-            <View style={styles.instructionCard}>
-              <Text style={styles.instructionText}>
+            <View style={[styles.instructionCard, isDark && { backgroundColor: '#11351A' }]}>
+              <Text style={[styles.instructionText, isDark && { color: COLORS.white, opacity: 0.88 }]}>
                 {recipe.instructions}
               </Text>
             </View>

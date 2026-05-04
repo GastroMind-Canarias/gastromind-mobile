@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, Bot, ChefHat, Clock3, Heart, Wrench } from 'lucide-react-native';
+import { ArrowLeft, Bot, ChefHat, Clock3, Flame, Heart, Wrench } from 'lucide-react-native';
 import { apiClient } from '../../external/api/apiClient';
 import { COLORS } from '../../../shared/theme/colors';
 import { useTheme } from '../../../shared/theme/ThemeProvider';
@@ -112,13 +112,17 @@ const AIChatScreen: React.FC = () => {
 
     try {
       try {
-        await apiClient.post('/user-favorites/me/from-suggestion', {
-          suggestionId,
+        await apiClient.post('/user-favorites/me/from-suggestion', null, {
+          params: { suggestionId },
         });
       } catch {
-        await apiClient.post('/user-favorites/me/from-suggestion', {
-          suggestion_id: suggestionId,
-        });
+        try {
+          await apiClient.post('/user-favorites/me/from-suggestion', null, {
+            params: { suggestion_id: suggestionId },
+          });
+        } catch {
+          await apiClient.post(`/user-favorites/me/from-suggestion?suggestionId=${encodeURIComponent(suggestionId)}`);
+        }
       }
 
       setSuccess('Receta anadida a favoritos.');
@@ -216,34 +220,44 @@ const AIChatScreen: React.FC = () => {
 
         {suggestion ? (
           <View style={[styles.recipeCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
-            <Text style={styles.recipeBadge}>{suggestion.recipe.difficulty}</Text>
-            <Text style={[styles.recipeTitle, isDark && { color: COLORS.white }]}>{suggestion.recipe.title}</Text>
-            <Text style={[styles.recipeInstructions, isDark && { color: COLORS.white, opacity: 0.86 }]}>{suggestion.recipe.instructions}</Text>
-
-            <View style={styles.metaRow}>
-              <View style={[styles.metaPill, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
-                <Clock3 size={12} color={COLORS.primary} strokeWidth={2.4} />
-                <Text style={[styles.metaText, isDark && { color: COLORS.white }]}>{suggestion.recipe.prep_time} min</Text>
+            <View style={[styles.recipeHero, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
+              <View style={styles.recipeHeroHeader}>
+                <Text style={styles.recipeBadge}>{suggestion.recipe.difficulty}</Text>
+                <View style={styles.scorePill}>
+                  <Flame size={12} color="#A34511" strokeWidth={2.6} />
+                  <Text style={styles.scorePillText}>IA Pick</Text>
+                </View>
               </View>
-              <View style={[styles.metaPill, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
-                <Wrench size={12} color={isDark ? COLORS.white : DARK} strokeWidth={2.4} />
-                <Text style={[styles.metaText, isDark && { color: COLORS.white }]}>{suggestion.recipe.appliance_needed}</Text>
+              <Text style={[styles.recipeTitle, isDark && { color: COLORS.white }]}>{suggestion.recipe.title}</Text>
+              <View style={styles.metaRow}>
+                <View style={[styles.metaPill, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
+                  <Clock3 size={12} color={COLORS.primary} strokeWidth={2.4} />
+                  <Text style={[styles.metaText, isDark && { color: COLORS.white }]}>{suggestion.recipe.prep_time} min</Text>
+                </View>
+                <View style={[styles.metaPill, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
+                  <Wrench size={12} color={isDark ? COLORS.white : DARK} strokeWidth={2.4} />
+                  <Text style={[styles.metaText, isDark && { color: COLORS.white }]}>{suggestion.recipe.appliance_needed}</Text>
+                </View>
               </View>
             </View>
 
-            <Text style={[styles.sectionTitle, isDark && { color: COLORS.white, opacity: 0.75 }]}>Ingredientes usados</Text>
-            {suggestion.recipe.ingredientsUsed?.length ? (
-              suggestion.recipe.ingredientsUsed.map((ingredient) => (
-                <View key={`${ingredient.productId}-${ingredient.productName}`} style={[styles.ingredientRow, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
-                  <Text style={[styles.ingredientName, isDark && { color: COLORS.white }]}>{ingredient.productName}</Text>
-                  <Text style={styles.ingredientQty}>
-                    {ingredient.quantityUsed} / {ingredient.quantityAvailable}
-                  </Text>
-                </View>
-              ))
-            ) : (
-              <Text style={[styles.recipeInstructions, isDark && { color: COLORS.white, opacity: 0.82 }]}>Sin detalle de ingredientes.</Text>
-            )}
+            <Text style={[styles.recipeInstructions, isDark && { color: COLORS.white, opacity: 0.86 }]}>{suggestion.recipe.instructions}</Text>
+
+            <View style={[styles.ingredientsPanel, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
+              <Text style={[styles.sectionTitle, isDark && { color: COLORS.white, opacity: 0.8 }]}>Ingredientes usados</Text>
+              {suggestion.recipe.ingredientsUsed?.length ? (
+                suggestion.recipe.ingredientsUsed.map((ingredient) => (
+                  <View key={`${ingredient.productId}-${ingredient.productName}`} style={[styles.ingredientRow, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
+                    <Text style={[styles.ingredientName, isDark && { color: COLORS.white }]}>{ingredient.productName}</Text>
+                    <Text style={styles.ingredientQty}>
+                      {ingredient.quantityUsed} / {ingredient.quantityAvailable}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={[styles.recipeInstructions, isDark && { color: COLORS.white, opacity: 0.82 }]}>Sin detalle de ingredientes.</Text>
+              )}
+            </View>
 
             <TouchableOpacity
               style={[styles.favoriteButton, isSavingFavorite && styles.buttonDisabled]}
@@ -414,11 +428,25 @@ const styles = StyleSheet.create({
   },
   recipeCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: '#DDECE1',
     padding: 14,
     ...SHADOW,
+  },
+  recipeHero: {
+    backgroundColor: '#F0FAF4',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D7EBDC',
+    padding: 12,
+    marginBottom: 12,
+  },
+  recipeHeroHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   recipeBadge: {
     alignSelf: 'flex-start',
@@ -431,14 +459,29 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    marginBottom: 10,
+  },
+  scorePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E8C9A0',
+    backgroundColor: '#FFF2DE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  scorePillText: {
+    color: '#A34511',
+    fontSize: 11,
+    fontWeight: '800',
   },
   recipeTitle: {
     color: DARK,
-    fontSize: 24,
+    fontSize: 25,
     fontWeight: '900',
     lineHeight: 29,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   recipeInstructions: {
     color: DARK,
@@ -452,6 +495,14 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 12,
     marginBottom: 14,
+  },
+  ingredientsPanel: {
+    backgroundColor: '#F4FBF7',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DDEAE0',
+    padding: 10,
+    marginBottom: 4,
   },
   metaPill: {
     flexDirection: 'row',

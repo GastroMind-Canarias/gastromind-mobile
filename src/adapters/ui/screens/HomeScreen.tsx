@@ -16,7 +16,6 @@ import {
 } from "react-native";
 import {
   ChefHat,
-  ChevronRight,
   Home,
   LogOut,
   ShieldAlert,
@@ -69,8 +68,8 @@ function Avatar({ name: _name, size = 44 }: { name: string; size?: number }) {
   );
 }
 
-// ─── Stat chip (la misma que en las otras pantallas) ─────────────────────────
-function StatChip({
+// ─── Header metric tile ───────────────────────────────────────────────────────
+function HeaderMetric({
   icon: Icon,
   value,
   label,
@@ -84,15 +83,15 @@ function StatChip({
   return (
     <View
       style={[
-        styles.statChip,
-        { borderColor: color + "55", backgroundColor: color + "18" },
+        styles.headerMetricTile,
+        { borderColor: color + "55" },
       ]}
     >
-      <View style={[styles.statIconWrap, { backgroundColor: color + "28" }]}> 
+      <View style={[styles.headerMetricIconWrap, { backgroundColor: color + "2A" }]}>
         <Icon size={12} color={color} strokeWidth={2.5} />
       </View>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.headerMetricValue, { color }]}>{value}</Text>
+      <Text style={styles.headerMetricLabel}>{label}</Text>
     </View>
   );
 }
@@ -258,8 +257,11 @@ const HomeScreen: React.FC = () => {
         translucent={false}
       />
       {/* ══ HEADER PANEL ══ */}
-      <View style={[styles.header, { paddingTop: insets.top + HEADER_TOP_GAP }]}>
-        {/* Top bar */}
+      <View style={[styles.header, isDark && styles.headerDark, { paddingTop: insets.top + HEADER_TOP_GAP }]}> 
+        <View style={styles.headerDecoA} />
+        <View style={styles.headerDecoB} />
+        <View style={styles.headerDecoC} />
+
         <View style={styles.headerTopBar}>
           <View style={styles.ledRow}>
             <View style={styles.led} />
@@ -271,38 +273,41 @@ const HomeScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Greeting + avatar */}
-        <View style={styles.greetingRow}>
-          <View style={styles.greetingText}>
+        <View style={styles.heroRow}>
+          <View style={styles.heroTextBlock}>
             <Text style={styles.greetingSub}>{getGreeting()},</Text>
             <Text style={styles.greetingName}>{firstName}</Text>
+            <Text style={styles.heroCaption}>
+              Tu cocina en control: estado del hogar y nevera en un solo vistazo.
+            </Text>
           </View>
-          <View style={styles.avatarRing}>
-            <Avatar name={profile.name} size={56} />
+
+          <View style={styles.heroDotCol}>
+            <View style={styles.heroDot} />
+            <View style={[styles.heroDot, styles.heroDotSoft]} />
           </View>
         </View>
 
-        {/* Stats fila */}
-        <View style={styles.statsRow}>
-          <StatChip
+        <View style={styles.headerMetricGrid}>
+          <HeaderMetric
             icon={Snowflake}
             value={fridgeItems.length}
             label="En nevera"
             color={COLORS.primary}
           />
-          <StatChip
+          <HeaderMetric
             icon={ShieldAlert}
             value={expiredCount}
             label="Caducados"
             color={COLORS.error}
           />
-          <StatChip
+          <HeaderMetric
             icon={Home}
             value={memberCount}
             label="Personas"
             color={COLORS.accent}
           />
-          <StatChip
+          <HeaderMetric
             icon={UtensilsCrossed}
             value={toolCount}
             label="Utensilios"
@@ -379,14 +384,6 @@ const HomeScreen: React.FC = () => {
               isDark={isDark}
               onPress={() => router.push(ROUTES.appTabFridge)}
             />
-            <QuickCard
-              icon={User}
-              title="Mi Perfil"
-              subtitle={`${toolCount} utensilios`}
-              accentColor="#5BBCFF"
-              isDark={isDark}
-              onPress={() => router.push(ROUTES.appTabProfile)}
-            />
           </View>
 
           {/* ── Recetas IA ── */}
@@ -461,12 +458,6 @@ const HomeScreen: React.FC = () => {
                   : `${memberCount} personas en el hogar`}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.householdArrow}
-              onPress={() => router.push(ROUTES.appTabProfile)}
-            >
-              <ChevronRight size={18} color={COLORS.primary} strokeWidth={2.8} />
-            </TouchableOpacity>
           </View>
 
         </ScrollView>
@@ -510,12 +501,44 @@ const styles = StyleSheet.create({
 
   // ── Header
   header: {
-    backgroundColor: DARK_GREEN,
+    backgroundColor: "#0A1B14",
     paddingHorizontal: 22,
     paddingBottom: 22,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+    overflow: "hidden",
     ...SHADOW_MD,
+  },
+  headerDark: {
+    backgroundColor: "#08140F",
+  },
+  headerDecoA: {
+    position: "absolute",
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: COLORS.primary + "2A",
+    top: -80,
+    right: -46,
+  },
+  headerDecoB: {
+    position: "absolute",
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: COLORS.accent + "22",
+    bottom: -38,
+    left: -42,
+  },
+  headerDecoC: {
+    position: "absolute",
+    width: 120,
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary + "66",
+    right: -20,
+    top: 24,
+    transform: [{ rotate: "-24deg" }],
   },
   headerTopBar: {
     flexDirection: "row",
@@ -559,52 +582,70 @@ const styles = StyleSheet.create({
   },
   logoutText: { color: COLORS.error, fontWeight: "700", fontSize: 13 },
 
-  greetingRow: {
+  heroRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 10,
     marginBottom: 22,
   },
-  greetingText: { flex: 1 },
+  heroTextBlock: { flex: 1, paddingTop: 2 },
   greetingSub: {
     color: ICE,
-    fontSize: 14,
-    fontWeight: "500",
-    opacity: 0.65,
+    fontSize: 13,
+    fontWeight: "700",
+    opacity: 0.84,
     marginBottom: 2,
+    letterSpacing: 0.3,
   },
   greetingName: {
     color: "#FFFFFF",
-    fontSize: 30,
+    fontSize: 31,
     fontWeight: "900",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
-  avatarRing: {
-    borderRadius: 34,
-    borderWidth: 2.5,
-    borderColor: COLORS.primary,
-    padding: 2,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.primary,
-        shadowOpacity: 0.7,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      android: { elevation: 6 },
-    }),
+  heroCaption: {
+    marginTop: 8,
+    color: ICE,
+    fontSize: 11,
+    lineHeight: 16,
+    opacity: 0.68,
+    fontWeight: "500",
+    maxWidth: 230,
+  },
+  heroDotCol: {
+    alignItems: "center",
+    gap: 8,
+    paddingRight: 2,
+  },
+  heroDot: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+  },
+  heroDotSoft: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: COLORS.accent,
+    opacity: 0.8,
   },
 
-  // Stats
-  statsRow: { flexDirection: "row", gap: 8 },
-  statChip: {
+  // Header metrics
+  headerMetricGrid: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  headerMetricTile: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 9,
-    borderRadius: 14,
-    borderWidth: 1.5,
+    paddingVertical: 10,
+    borderRadius: 13,
+    borderWidth: 1.2,
+    backgroundColor: COLORS.white + "08",
   },
-  statIconWrap: {
+  headerMetricIconWrap: {
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -612,13 +653,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 4,
   },
-  statValue: { fontSize: 17, fontWeight: "900" },
-  statLabel: {
+  headerMetricValue: {
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  headerMetricLabel: {
     fontSize: 9,
     color: ICE,
-    opacity: 0.65,
-    fontWeight: "600",
+    opacity: 0.75,
+    fontWeight: "700",
     marginTop: 1,
+    letterSpacing: 0.2,
   },
 
   // ── Scroll body
@@ -810,16 +855,6 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
     opacity: 0.45,
     marginTop: 2,
-  },
-  householdArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.primary + "18",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1.2,
-    borderColor: COLORS.primary + "44",
   },
 });
 

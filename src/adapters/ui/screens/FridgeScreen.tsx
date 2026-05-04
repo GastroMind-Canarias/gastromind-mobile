@@ -42,6 +42,42 @@ import { AppDialog, type AppDialogAction } from '../components/AppDialog';
 const FRIDGE_DARK = '#0D1F17';   // verde muy oscuro (panel nevera)
 const FRIDGE_MID = '#1A3826';   // verde oscuro medio
 const ICE_BLUE = '#C8F0DC';   // tinte helado suave
+const DEFAULT_TICKET_STORE_ID = '7c637641-7619-4ce1-9221-758d668fec56';
+
+function extractListPayload(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.content)) return payload.content;
+  return [];
+}
+
+function readStoreId(item: any): string {
+  const candidates = [item?.id, item?.storeId, item?.store_id];
+  const found = candidates.find(
+    (value) => typeof value === 'string' && value.trim().length > 0,
+  );
+  return found ? found.trim() : '';
+}
+
+async function resolveAllowedStoreId(): Promise<{ id: string; source: 'stores' | 'default' }> {
+  try {
+    const response = await apiClient.get('/stores');
+    const rows = extractListPayload(response.data);
+    const firstStoreId = rows.map(readStoreId).find((id) => id.length > 0);
+
+    if (firstStoreId) {
+      return { id: firstStoreId, source: 'stores' };
+    }
+  } catch (error: any) {
+    console.warn('[TicketOCR] No se pudo resolver store desde /stores', {
+      status: error?.response?.status,
+      message: error?.message,
+    });
+  }
+
+  return { id: DEFAULT_TICKET_STORE_ID, source: 'default' };
+}
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
@@ -116,6 +152,15 @@ function getExpiryMeta(expirationDate: string, status: ItemStatus) {
   };
 }
 
+function formatDate(value: string): string {
+  const date = new Date(value + 'T00:00:00');
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'short',
+  });
+}
+
 // ─── Stat chip ────────────────────────────────────────────────────────────────
 function StatChip({
   icon: Icon,
@@ -159,29 +204,18 @@ function ItemCard({
         { transform: [{ scale: scaleAnim }] },
       ]}
     >
-      <View style={[styles.cardStrip, { backgroundColor: cfg.color }]} />
-
       <View style={styles.cardBody}>
-        <View style={styles.cardTop}>
-          <View style={[styles.cardIconWrap, { backgroundColor: cfg.bg, borderColor: cfg.color + '2A' }]}> 
-            <StatusIcon size={20} color={cfg.color} strokeWidth={2.6} />
+        <View style={styles.cardTopRow}>
+          <View style={[styles.cardStatusSeal, { backgroundColor: cfg.bg, borderColor: cfg.color + '35' }]}> 
+            <StatusIcon size={16} color={cfg.color} strokeWidth={2.6} />
+            <Text style={[styles.cardStatusSealText, { color: cfg.color }]}>{cfg.label}</Text>
           </View>
-          <View style={styles.cardMeta}>
-            <Text style={[styles.cardTitle, isDark && { color: COLORS.white }]} numberOfLines={1}>{item.product}</Text>
-            <View style={styles.cardSubRow}>
-              <Text style={[styles.cardSubKey, isDark && { color: COLORS.white + 'CC' }]}>Cant.</Text>
-              <Text style={[styles.cardSubValue, isDark && { color: COLORS.white }]}>{item.quantity} uds.</Text>
-              <Text style={[styles.cardSubDot, isDark && { color: COLORS.white + '88' }]}>•</Text>
-              <Text style={[styles.cardSubKey, isDark && { color: COLORS.white + 'CC' }]}>Cad.</Text>
-              <Text style={[styles.cardSubValue, isDark && { color: COLORS.white }]}>{item.expirationDate}</Text>
-            </View>
-          </View>
-          <View style={[styles.statusPill, { backgroundColor: cfg.bg, borderColor: cfg.color + '55' }]}> 
-            <Text style={[styles.statusPillText, { color: cfg.color }]}>{cfg.label}</Text>
-          </View>
+          <View style={[styles.cardStatusDot, { backgroundColor: cfg.color }]} />
         </View>
 
-        <View style={[styles.cardDivider, isDark && { backgroundColor: COLORS.white + '1F' }]} />
+        <Text style={[styles.cardTitle, isDark && { color: COLORS.white }]} numberOfLines={2}>
+          {item.product}
+        </Text>
 
         <View style={styles.metaRow}>
           <View style={styles.metaPill}>
@@ -192,6 +226,13 @@ function ItemCard({
             <StatusIcon size={13} color={expiryMeta.color} strokeWidth={2.5} />
             <Text style={[styles.metaPillText, { color: expiryMeta.color }]}>{expiryMeta.label}</Text>
           </View>
+        </View>
+
+        <View style={[styles.cardDateStrip, isDark && { borderColor: COLORS.white + '1F' }]}>
+          <Text style={[styles.cardDateLabel, isDark && { color: COLORS.white + 'A8' }]}>Caduca</Text>
+          <Text style={[styles.cardDateValue, isDark && { color: COLORS.white }]}>
+            {formatDate(item.expirationDate)}
+          </Text>
         </View>
 
         <View style={styles.cardActions}>
@@ -255,6 +296,11 @@ function TicketModal({
 
   const handlePickImage = async (useCamera: boolean) => {
     try {
+      console.log('[TicketOCR] Inicio flujo imagen', {
+        source: useCamera ? 'camera' : 'gallery',
+        hasUserId: !!userId,
+      });
+
       if (!userId) {
         showDialog({
           title: 'Usuario no disponible',
@@ -295,6 +341,11 @@ function TicketModal({
         });
       }
 
+      console.log('[TicketOCR] Resultado picker', {
+        canceled: result.canceled,
+        assetsCount: result.assets?.length ?? 0,
+      });
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selected = result.assets[0];
         if (!selected?.uri) return;
@@ -306,22 +357,73 @@ function TicketModal({
           const fileName = selected.fileName || `ticket-${Date.now()}.jpg`;
           const fileType = selected.mimeType || 'image/jpeg';
 
-          formData.append('image', {
+          console.log('[TicketOCR] Imagen seleccionada', {
             uri: selected.uri,
-            name: fileName,
-            type: fileType,
-          } as any);
-          formData.append('user_id', userId);
+            fileName,
+            fileType,
+            width: selected.width,
+            height: selected.height,
+            fileSize: selected.fileSize,
+          });
+
+          const buildFormData = () => {
+            const payload = new FormData();
+            payload.append('file', {
+              uri: selected.uri,
+              name: fileName,
+              type: fileType,
+            } as any);
+            return payload;
+          };
 
           const trimmedStoreId = storeId.trim();
-          if (trimmedStoreId.length > 0) {
-            formData.append('store_id', trimmedStoreId);
+          const fallbackStore =
+            trimmedStoreId.length > 0
+              ? { id: trimmedStoreId, source: 'input' as const }
+              : await resolveAllowedStoreId();
+          const effectiveStoreId = fallbackStore.id;
+
+          console.log('[TicketOCR] Enviando ticket a backend', {
+            endpoint: '/tickets/from-image',
+            baseURL: apiClient.defaults.baseURL,
+            userId,
+            storeId: effectiveStoreId,
+            usedDefaultStore: trimmedStoreId.length === 0 && fallbackStore.source === 'default',
+            storeIdSource: fallbackStore.source,
+            fileField: 'file',
+            storeIdLocation: 'query_param',
+            note: 'authorization via interceptor',
+          });
+
+          let response;
+
+          try {
+            response = await apiClient.post('/tickets/from-image', buildFormData(), {
+              params: {
+                store_id: effectiveStoreId,
+              },
+            });
+          } catch (firstError: any) {
+            const firstStatus = firstError?.response?.status;
+            if (firstStatus === 403 && trimmedStoreId.length === 0) {
+              console.warn('[TicketOCR] 403 con store_id fallback. Reintentando sin store_id', {
+                attemptedStoreId: effectiveStoreId,
+                storeIdSource: fallbackStore.source,
+              });
+
+              response = await apiClient.post('/tickets/from-image', buildFormData());
+            } else {
+              throw firstError;
+            }
           }
 
-          const response = await apiClient.post('/tickets/from-image', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
+          console.log('[TicketOCR] Respuesta backend', {
+            status: response.status,
+            created_items_count: response?.data?.created_items_count,
+            items_count: response?.data?.items_count,
+            products_count: response?.data?.products_count,
+            items_length: response?.data?.items?.length,
+            products_length: response?.data?.products?.length,
           });
 
           await onImported();
@@ -355,7 +457,11 @@ function TicketModal({
           });
 
         } catch (error: any) {
-          console.error('Error processing ticket:', error);
+          console.error('[TicketOCR] Error processing ticket:', {
+            message: error?.message,
+            status: error?.response?.status,
+            data: error?.response?.data,
+          });
           setIsProcessing(false);
           showDialog({
             title: 'No se pudo procesar el ticket',
@@ -365,9 +471,11 @@ function TicketModal({
             variant: 'danger',
           });
         }
+      } else {
+        console.log('[TicketOCR] Usuario canceló selección de imagen');
       }
     } catch (error) {
-      console.error('Error picking image:', error);
+      console.error('[TicketOCR] Error picking image:', error);
       showDialog({
         title: 'Error',
         message: 'Hubo un problema al intentar abrir la cámara o galería.',
@@ -750,114 +858,117 @@ export default function FridgeApp() {
 
       {/* ══ FRIDGE BODY ══ */}
       <View style={[styles.fridgeBody, isDark && { backgroundColor: '#0C100D' }]}>
-        {/* Search bar */}
-        <View style={[styles.searchWrap, isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}>
-          <Search size={15} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.6} />
-          <TextInput
-            style={[styles.searchInput, isDark && { color: COLORS.white }]}
-            placeholder="Buscar producto..."
-            placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '55'}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <X size={16} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.8} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <Animated.View style={[styles.listContainer, { opacity: fadeAnim }]}>
+          <FlatList
+            style={styles.list}
+            data={filtered}
+            keyExtractor={(i) => i.id}
+            renderItem={({ item }) => (
+              <ItemCard
+                item={item}
+                isDark={isDark}
+                onEdit={() => openEdit(item)}
+                onDelete={() => handleDelete(item)}
+              />
+            )}
+            ListHeaderComponent={(
+              <>
+                <View style={[styles.searchWrap, isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}> 
+                  <Search size={15} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.6} />
+                  <TextInput
+                    style={[styles.searchInput, isDark && { color: COLORS.white }]}
+                    placeholder="Buscar producto..."
+                    placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '55'}
+                    value={search}
+                    onChangeText={setSearch}
+                  />
+                  {search.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearch('')}>
+                      <X size={16} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.8} />
+                    </TouchableOpacity>
+                  )}
+                </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtersRow}
-          style={{ flexGrow: 0, maxHeight: 36, marginBottom: 16 }}
-        >
-          <TouchableOpacity
-            onPress={() => setActiveFilter('ALL')}
-            style={[
-              styles.filterPill,
-              isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
-              activeFilter === 'ALL' && styles.filterPillActive,
-            ]}
-          >
-            <Search
-              size={14}
-              color={activeFilter === 'ALL' ? COLORS.white : isDark ? COLORS.white + 'CC' : COLORS.text + '99'}
-              strokeWidth={2.6}
-            />
-            <Text
-              style={[
-                styles.filterPillText,
-                isDark && { color: COLORS.white },
-                activeFilter === 'ALL' && styles.filterPillTextActive,
-              ]}
-            >
-              Todas
-            </Text>
-          </TouchableOpacity>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filtersRow}
+                  style={styles.filtersScroller}
+                >
+                  <TouchableOpacity
+                    onPress={() => setActiveFilter('ALL')}
+                    style={[
+                      styles.filterPill,
+                      isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
+                      activeFilter === 'ALL' && styles.filterPillActive,
+                    ]}
+                  >
+                    <Search
+                      size={14}
+                      color={activeFilter === 'ALL' ? COLORS.white : isDark ? COLORS.white + 'CC' : COLORS.text + '99'}
+                      strokeWidth={2.6}
+                    />
+                    <Text
+                      style={[
+                        styles.filterPillText,
+                        isDark && { color: COLORS.white },
+                        activeFilter === 'ALL' && styles.filterPillTextActive,
+                      ]}
+                    >
+                      Todas
+                    </Text>
+                  </TouchableOpacity>
 
-          {([ItemStatus.GOOD, ItemStatus.OPENED, ItemStatus.EXPIRED] as const).map(s => {
-            const cfg = STATUS_CONFIG[s] || STATUS_CONFIG[ItemStatus.GOOD];
-            const FilterIcon = cfg.icon;
-            const active = activeFilter === s;
-            return (
-              <TouchableOpacity
-                key={s}
-                onPress={() => setActiveFilter(s)}
-                style={[
-                  styles.filterPill,
-                  isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
-                  active && { backgroundColor: cfg.color, borderColor: cfg.color },
-                ]}
-              >
-                <FilterIcon
-                  size={14}
-                  color={active ? COLORS.white : cfg.color}
-                  strokeWidth={2.6}
-                />
-                <Text style={[styles.filterPillText, isDark && { color: COLORS.white }, active && styles.filterPillTextActive]}>{cfg.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Item list */}
-        <Animated.View style={[styles.listContainer, { opacity: fadeAnim }]}> 
-          {filtered.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconWrap}>
-                <Snowflake size={34} color={COLORS.primary} strokeWidth={2.4} />
+                  {([ItemStatus.GOOD, ItemStatus.OPENED, ItemStatus.EXPIRED] as const).map((s) => {
+                    const cfg = STATUS_CONFIG[s] || STATUS_CONFIG[ItemStatus.GOOD];
+                    const FilterIcon = cfg.icon;
+                    const active = activeFilter === s;
+                    return (
+                      <TouchableOpacity
+                        key={s}
+                        onPress={() => setActiveFilter(s)}
+                        style={[
+                          styles.filterPill,
+                          isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
+                          active && { backgroundColor: cfg.color, borderColor: cfg.color },
+                        ]}
+                      >
+                        <FilterIcon
+                          size={14}
+                          color={active ? COLORS.white : cfg.color}
+                          strokeWidth={2.6}
+                        />
+                        <Text style={[styles.filterPillText, isDark && { color: COLORS.white }, active && styles.filterPillTextActive]}>
+                          {cfg.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            )}
+            ListEmptyComponent={(
+              <View style={styles.emptyState}>
+                <View style={styles.emptyIconWrap}>
+                  <Snowflake size={34} color={COLORS.primary} strokeWidth={2.4} />
+                </View>
+                <Text style={[styles.emptyTitle, isDark && { color: COLORS.white, opacity: 0.88 }]}> 
+                  {search.trim() ? 'No encontrado' : 'Nevera vacía'}
+                </Text>
+                <Text style={[styles.emptySub, isDark && { color: COLORS.white, opacity: 0.72 }]}> 
+                  {search.trim()
+                    ? `No hay productos con "${search}"`
+                    : 'Pulsa Añadir o importa un ticket'}
+                </Text>
               </View>
-              <Text style={[styles.emptyTitle, isDark && { color: COLORS.white, opacity: 0.88 }]}>
-                {search.trim() ? 'No encontrado' : 'Nevera vacía'}
-              </Text>
-              <Text style={[styles.emptySub, isDark && { color: COLORS.white, opacity: 0.72 }]}> 
-                {search.trim()
-                  ? `No hay productos con "${search}"`
-                  : 'Pulsa Añadir o importa un ticket'}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              style={styles.list}
-              data={filtered}
-              keyExtractor={i => i.id}
-              renderItem={({ item }) => (
-                <ItemCard
-                  item={item}
-                  isDark={isDark}
-                  onEdit={() => openEdit(item)}
-                  onDelete={() => handleDelete(item)}
-                />
-              )}
-              contentContainerStyle={[
-                styles.listContent,
-                { paddingBottom: Math.max(32, insets.bottom + 24) },
-              ]}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
+            )}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: Math.max(88, insets.bottom + 72) },
+            ]}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={false}
+          />
         </Animated.View>
       </View>
 
@@ -1003,7 +1114,7 @@ const styles = StyleSheet.create({
   fridgeBody: {
     flex: 1,
     paddingHorizontal: 18,
-    paddingTop: 20,
+    paddingTop: 14,
     paddingBottom: 6,
   },
 
@@ -1016,7 +1127,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingTop: 2,
+    paddingTop: 4,
   },
 
   // Search
@@ -1030,7 +1141,12 @@ const styles = StyleSheet.create({
     ...SHADOW_SM,
   },
   searchInput: { flex: 1, fontSize: 15, color: COLORS.text },
-  filtersRow: { gap: 8, paddingBottom: 0 },
+  filtersScroller: {
+    flexGrow: 0,
+    maxHeight: 40,
+    marginBottom: 14,
+  },
+  filtersRow: { gap: 8, paddingBottom: 0, paddingRight: 6 },
   filterPill: {
     height: 34,
     borderRadius: 17,
@@ -1058,73 +1174,54 @@ const styles = StyleSheet.create({
   // ── Item card
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 20,
     marginBottom: 12,
-    flexDirection: 'row',
-    overflow: 'hidden',
+    overflow: 'visible',
     borderWidth: 1,
     borderColor: '#DDEBE2',
     ...SHADOW_SM,
   },
-  cardStrip: { width: 3 },
-  cardBody: { flex: 1, paddingHorizontal: 14, paddingVertical: 12 },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  cardIconWrap: {
-    width: 38, height: 38, borderRadius: 11,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1,
+  cardBody: { paddingHorizontal: 14, paddingVertical: 13 },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  cardMeta: { flex: 1 },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1D3026',
-    letterSpacing: -0.1,
-    marginBottom: 5,
-  },
-  cardSubRow: {
+  cardStatusSeal: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 4,
-  },
-  cardSubKey: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#75887E',
-    textTransform: 'uppercase',
-    letterSpacing: 0.35,
-  },
-  cardSubValue: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#3D5348',
-  },
-  cardSubDot: {
-    fontSize: 12,
-    color: '#9AABA2',
-    marginHorizontal: 3,
-  },
-  statusPill: {
+    gap: 6,
     paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 20,
-    borderWidth: 1.2, alignSelf: 'flex-start',
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
   },
-  statusPillText: {
-    fontSize: 10,
+  cardStatusSealText: {
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.25,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
-  cardDivider: { height: 1, backgroundColor: '#E8F0EB', marginVertical: 9 },
-  metaRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  cardStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1D3026',
+    letterSpacing: -0.3,
+    marginBottom: 10,
+    lineHeight: 21,
+  },
+  metaRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   metaPill: {
     borderRadius: 999,
-    paddingVertical: 3,
-    paddingHorizontal: 2,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: COLORS.primary + '22',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
@@ -1134,12 +1231,36 @@ const styles = StyleSheet.create({
     color: '#5B7065',
     fontWeight: '600',
   },
+  cardDateStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E7EFEA',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 10,
+    backgroundColor: '#F7FBF8',
+  },
+  cardDateLabel: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    color: '#6B7E74',
+    fontWeight: '700',
+  },
+  cardDateValue: {
+    fontSize: 13,
+    color: '#263A2F',
+    fontWeight: '700',
+  },
   cardActions: {
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#EDF4EF',
-    paddingTop: 7,
+    paddingTop: 8,
   },
   cardBtn: {
     flex: 1,
