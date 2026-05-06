@@ -22,6 +22,7 @@ import {
   Moon,
   Plus,
   ShieldAlert,
+  BellRing,
   Sparkles,
   Sun,
   User,
@@ -52,6 +53,8 @@ import AppBanner from "../components/AppBanner";
 import AppActionBar from "../components/AppActionBar";
 import AppField from "../components/AppField";
 import { useAuth } from "../hooks/useAuth";
+import { notificationService } from "../../external/notifications/NotificationService";
+import { DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from "../../../core/domain/notification.types";
 
 // ─── Constantes de diseño ─────────────────────────────────────────────────────
 const DARK_GREEN = "#0D1F17";
@@ -370,6 +373,10 @@ export default function ProfileScreen() {
   } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedSection, setExpandedSection] = useState<"home" | "tools" | "allergens">("home");
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(
+    DEFAULT_NOTIFICATION_PREFERENCES,
+  );
+  const [pushPermissionGranted, setPushPermissionGranted] = useState(false);
 
   const closeDialog = () => setDialog(null);
   const showDialog = (config: {
@@ -390,6 +397,41 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const loadNotificationPrefs = async () => {
+      const [permission, prefs] = await Promise.all([
+        notificationService.getPermissionStatus(),
+        notificationService.getPreferences(),
+      ]);
+      setPushPermissionGranted(permission === "granted");
+      setNotificationPrefs(prefs);
+    };
+
+    loadNotificationPrefs().catch(() => {});
+  }, []);
+
+  const handleTogglePush = async () => {
+    if (!notificationPrefs.enabled) {
+      const status = await notificationService.requestPermission();
+      setPushPermissionGranted(status === "granted");
+      if (status !== "granted") {
+        setLoadError("Debes habilitar permisos de notificaciones en el sistema.");
+        return;
+      }
+      await notificationService.enableLocalNotificationsAsync();
+    }
+
+    const next = await notificationService.updatePreferences({
+      enabled: !notificationPrefs.enabled,
+    });
+    setNotificationPrefs(next);
+  };
+
+  const handleChangeNotificationDays = async (daysBeforeExpiry: number) => {
+    const next = await notificationService.updatePreferences({ daysBeforeExpiry });
+    setNotificationPrefs(next);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -954,6 +996,72 @@ export default function ProfileScreen() {
             {isDarkMode ? "Modo oscuro activado" : "Cambiar a modo oscuro"}
           </Text>
         </TouchableOpacity>
+
+        <View style={[styles.notificationCard, isDarkMode && styles.notificationCardDark]}>
+          <View style={styles.notificationCardTop}>
+            <View style={styles.notificationCardTitleWrap}>
+              <BellRing size={16} color={COLORS.accent} strokeWidth={2.5} />
+              <Text style={[styles.notificationCardTitle, isDarkMode && styles.notificationCardTitleDark]}>
+                Avisos de caducidad
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                handleTogglePush().catch(() => {
+                  setLoadError("No se pudo actualizar la preferencia de notificaciones.");
+                });
+              }}
+              style={[
+                styles.notificationToggle,
+                notificationPrefs.enabled && styles.notificationToggleActive,
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: notificationPrefs.enabled }}
+              accessibilityLabel="Activar avisos de caducidad"
+            >
+              <Text style={styles.notificationToggleText}>
+                {notificationPrefs.enabled ? "Activo" : "Inactivo"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.notificationCardSub, isDarkMode && styles.notificationCardSubDark]}>
+            {pushPermissionGranted
+              ? "Te avisaremos antes de que un producto caduque."
+              : "Permiso del sistema pendiente. Activalo para recibir avisos."}
+          </Text>
+
+          <View style={styles.notificationDaysRow}>
+            {[1, 2, 3].map((days) => {
+              const active = notificationPrefs.daysBeforeExpiry === days;
+              return (
+                <TouchableOpacity
+                  key={days}
+                  style={[
+                    styles.notificationDaysChip,
+                    active && styles.notificationDaysChipActive,
+                  ]}
+                  onPress={() => {
+                    handleChangeNotificationDays(days).catch(() => {
+                      setLoadError("No se pudo actualizar los dias de aviso.");
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Avisar con ${days} dias de antelacion`}
+                >
+                  <Text
+                    style={[
+                      styles.notificationDaysChipText,
+                      active && styles.notificationDaysChipTextActive,
+                    ]}
+                  >
+                    {days} dia{days === 1 ? "" : "s"}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
 
         <View
           style={[
@@ -1585,6 +1693,86 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   themeToggleTextDark: {
+    color: COLORS.white,
+  },
+  notificationCard: {
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.accent + "40",
+    backgroundColor: COLORS.accent + "10",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  notificationCardDark: {
+    backgroundColor: "#1A2E1F",
+    borderColor: COLORS.secondary + "66",
+  },
+  notificationCardTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  notificationCardTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  notificationCardTitle: {
+    color: "#7F4E00",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  notificationCardTitleDark: {
+    color: COLORS.white,
+  },
+  notificationCardSub: {
+    color: "#7F4E00",
+    fontSize: 12,
+    opacity: 0.78,
+  },
+  notificationCardSubDark: {
+    color: COLORS.white,
+    opacity: 0.78,
+  },
+  notificationToggle: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: COLORS.text + "16",
+  },
+  notificationToggleActive: {
+    backgroundColor: COLORS.primary,
+  },
+  notificationToggleText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  notificationDaysRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  notificationDaysChip: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.accent + "55",
+    backgroundColor: COLORS.white,
+  },
+  notificationDaysChipActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+  },
+  notificationDaysChipText: {
+    color: "#7F4E00",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  notificationDaysChipTextActive: {
     color: COLORS.white,
   },
 

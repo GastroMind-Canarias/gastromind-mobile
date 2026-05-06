@@ -34,12 +34,14 @@ import { COLORS } from '../../../shared/theme/colors';
 import { useTheme } from '../../../shared/theme/ThemeProvider';
 import { useNetwork } from '../../../shared/network/NetworkProvider';
 import { fridgeService } from '../../external/api/FridgeService';
+import { notificationService } from '../../external/notifications/NotificationService';
 import { apiClient } from '../../external/api/apiClient';
 import { AppBottomSheet } from '../components/AppBottomSheet';
 import { AppDialog, type AppDialogAction } from '../components/AppDialog';
 import AppStateView from '../components/AppStateView';
 import AppBanner from '../components/AppBanner';
 import AppField from '../components/AppField';
+import { getNearExpiryItems } from '../../../shared/utils/expiry';
 
 // ─── Constantes de tema ───────────────────────────────────────────────────────
 const FRIDGE_DARK = '#0D1F17';   // verde muy oscuro (panel nevera)
@@ -158,6 +160,15 @@ function formatDate(value: string): string {
   });
 }
 
+function toCapitalizedWords(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => (word.length > 0 ? word[0].toUpperCase() + word.slice(1) : ''))
+    .join(' ');
+}
+
 // ─── Stat chip ────────────────────────────────────────────────────────────────
 function StatChip({
   icon: Icon,
@@ -188,6 +199,7 @@ function ItemCard({
 }: { item: FridgeItem; onEdit: () => void; onDelete: () => void; isDark: boolean }) {
   const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG[ItemStatus.GOOD];
   const StatusIcon = cfg.icon;
+  const displayProduct = toCapitalizedWords(item.product);
   const expiryMeta = getExpiryMeta(item.expirationDate, item.status);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pressIn = () => Animated.spring(scaleAnim, { toValue: 0.975, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
@@ -211,7 +223,7 @@ function ItemCard({
         </View>
 
         <Text style={[styles.cardTitle, isDark && { color: COLORS.white }]} numberOfLines={2}>
-          {item.product}
+          {displayProduct}
         </Text>
 
         <View style={styles.metaRow}>
@@ -237,7 +249,7 @@ function ItemCard({
             onPress={onEdit} onPressIn={pressIn} onPressOut={pressOut}
             style={styles.cardBtn}
             accessibilityRole="button"
-            accessibilityLabel={`Editar ${item.product}`}
+            accessibilityLabel={`Editar ${displayProduct}`}
           >
             <Pencil size={14} color={COLORS.primary} strokeWidth={2.6} />
             <Text style={[styles.cardBtnText, { color: COLORS.primary }]}>Editar</Text>
@@ -247,7 +259,7 @@ function ItemCard({
             onPress={onDelete} onPressIn={pressIn} onPressOut={pressOut}
             style={styles.cardBtn}
             accessibilityRole="button"
-            accessibilityLabel={`Eliminar ${item.product}`}
+            accessibilityLabel={`Eliminar ${displayProduct}`}
           >
             <Trash2 size={14} color={COLORS.error} strokeWidth={2.6} />
             <Text style={[styles.cardBtnText, { color: COLORS.error }]}>Eliminar</Text>
@@ -384,16 +396,19 @@ function TicketModal({
             note: 'authorization via interceptor',
           });
 
-          const autoStoreId = await resolveAutoStoreId();
-
           const requestConfig = {
             timeout: 60000,
-            params: autoStoreId ? { store_id: autoStoreId } : undefined,
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              Accept: 'application/json',
+            },
           };
 
           console.log('[TicketOCR] Request config', {
-            storeIdSent: !!autoStoreId,
-            storeIdSource: autoStoreId ? 'auto' : 'none',
+            storeIdSent: false,
+            storeIdSource: 'disabled-by-request',
+            contentType: requestConfig.headers['Content-Type'],
+            accept: requestConfig.headers.Accept,
           });
 
           const response = await apiClient.post('/tickets/from-image', buildFormData(), requestConfig);
@@ -437,17 +452,32 @@ function TicketModal({
           });
 
         } catch (error: any) {
+          const status = error?.response?.status;
+          const backendMessage = typeof error?.response?.data?.message === 'string'
+            ? error.response.data.message
+            : '';
+          const retrySecondsMatch = backendMessage.match(/retry in\s+(\d+)/i);
+          const retrySeconds = retrySecondsMatch ? Number.parseInt(retrySecondsMatch[1], 10) : null;
+
           console.error('[TicketOCR] Error processing ticket:', {
             message: error?.message,
-            status: error?.response?.status,
+            status,
             data: error?.response?.data,
+            retrySeconds,
+            requestContentType: error?.config?.headers?.['Content-Type'] || error?.config?.headers?.['content-type'],
+            requestAccept: error?.config?.headers?.Accept || error?.config?.headers?.accept,
           });
+
+          const resolvedMessage = status === 429
+            ? retrySeconds && retrySeconds > 0
+              ? `El servicio OCR está saturado temporalmente. Inténtalo de nuevo en ${retrySeconds} segundos.`
+              : 'El servicio OCR está saturado temporalmente. Inténtalo de nuevo en unos segundos.'
+            : backendMessage || 'No pudimos leer la imagen. Probá con una foto más nítida o con mejor luz.';
+
           setIsProcessing(false);
           showDialog({
             title: 'No se pudo procesar el ticket',
-            message:
-              error?.response?.data?.message ||
-              'No pudimos leer la imagen. Probá con una foto más nítida o con mejor luz.',
+            message: resolvedMessage,
             variant: 'danger',
           });
         }
@@ -662,6 +692,8 @@ export default function FridgeApp() {
   } | null>(null);
   const [loadingScreen, setLoadingScreen] = useState(true);
   const [screenError, setScreenError] = useState<string | null>(null);
+  const [pushPermissionGranted, setPushPermissionGranted] = useState(false);
+  const [notificationDaysBeforeExpiry, setNotificationDaysBeforeExpiry] = useState(2);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -687,7 +719,8 @@ export default function FridgeApp() {
   const refresh = useCallback(async () => {
     try {
       const data = await fridgeService.getAll();
-      setItems(data);
+      setItems(data.map((item) => ({ ...item, product: toCapitalizedWords(item.product) })));
+      await notificationService.syncLocalExpiryNotifications(data);
       setScreenError(null);
     } catch (error: any) {
       const message = getErrorMessage(error, 'No pudimos cargar tu nevera.');
@@ -717,12 +750,31 @@ export default function FridgeApp() {
     }
   }, [refresh, refreshTicketUserId]);
 
+  const refreshNotificationState = useCallback(async () => {
+    const [permission, preferences] = await Promise.all([
+      notificationService.getPermissionStatus(),
+      notificationService.getPreferences(),
+    ]);
+    setPushPermissionGranted(permission === 'granted');
+    setNotificationDaysBeforeExpiry(preferences.daysBeforeExpiry);
+  }, []);
+
   useEffect(() => {
     loadInitialData();
+    refreshNotificationState().catch(() => {});
     Animated.timing(fadeAnim, {
       toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true,
     }).start();
-  }, [fadeAnim, loadInitialData]);
+  }, [fadeAnim, loadInitialData, refreshNotificationState]);
+
+  const requestPushPermission = useCallback(async () => {
+    const status = await notificationService.requestPermission();
+    setPushPermissionGranted(status === 'granted');
+    if (status === 'granted') {
+      await notificationService.enableLocalNotificationsAsync();
+      await notificationService.syncLocalExpiryNotifications(items);
+    }
+  }, [items]);
 
   const openTicketModal = async () => {
     if (!isOnline) {
@@ -764,8 +816,9 @@ export default function FridgeApp() {
     if (!productName.trim()) return;
     const parsedQty = parseFloat(quantity);
     const validQty = (isNaN(parsedQty) || parsedQty <= 0) ? 1 : parsedQty;
+    const normalizedProductName = toCapitalizedWords(productName);
     const data = {
-      product: productName.trim(),
+      product: normalizedProductName,
       quantity: validQty,
       expirationDate: expDate,
       status,
@@ -856,6 +909,7 @@ export default function FridgeApp() {
     opened: items.filter(i => i.status === ItemStatus.OPENED).length,
     expired: items.filter(i => i.status === ItemStatus.EXPIRED).length,
   };
+  const nearExpiryItems = getNearExpiryItems(items, notificationDaysBeforeExpiry);
 
   if (loadingScreen) {
     return (
@@ -974,6 +1028,29 @@ export default function FridgeApp() {
                       isDark={isDark}
                       onClose={() => setScreenError(null)}
                     />
+                  </View>
+                ) : null}
+
+                {nearExpiryItems.length > 0 && !pushPermissionGranted ? (
+                  <View style={styles.bannerWrap}>
+                    <AppBanner
+                      variant="warning"
+                      title="Activa avisos de caducidad"
+                      message={`Tienes ${nearExpiryItems.length} producto${nearExpiryItems.length === 1 ? '' : 's'} cerca de caducar.`}
+                      isDark={isDark}
+                    />
+                    <TouchableOpacity
+                      style={styles.pushEnableBtn}
+                      onPress={() => {
+                        requestPushPermission().catch(() => {
+                          setScreenError('No pudimos activar las notificaciones push.');
+                        });
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Activar notificaciones push"
+                    >
+                      <Text style={styles.pushEnableBtnText}>Activar avisos</Text>
+                    </TouchableOpacity>
                   </View>
                 ) : null}
 
@@ -1307,6 +1384,19 @@ const styles = StyleSheet.create({
   },
   bannerWrap: {
     marginBottom: 10,
+  },
+  pushEnableBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  pushEnableBtnText: {
+    color: COLORS.white,
+    fontWeight: '800',
+    fontSize: 12,
   },
   filtersRow: { gap: 8, paddingBottom: 0, paddingRight: 6 },
   filterPill: {

@@ -33,6 +33,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#4DC763"
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

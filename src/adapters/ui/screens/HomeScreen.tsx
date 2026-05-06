@@ -35,6 +35,8 @@ import { UserProfile } from "../../../core/domain/profile.types";
 import { useAuth } from "../hooks/useAuth";
 import AppStateView from "../components/AppStateView";
 import AppBanner from "../components/AppBanner";
+import { notificationService } from "../../external/notifications/NotificationService";
+import { getNearExpiryItems } from "../../../shared/utils/expiry";
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = "#0D1F17";
@@ -187,6 +189,8 @@ const HomeScreen: React.FC = () => {
   const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pushPermissionGranted, setPushPermissionGranted] = useState(false);
+  const [notificationDaysBeforeExpiry, setNotificationDaysBeforeExpiry] = useState(2);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
@@ -232,6 +236,19 @@ const HomeScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim, fetchData]);
 
+  useEffect(() => {
+    const fetchNotificationSettings = async () => {
+      const [permission, prefs] = await Promise.all([
+        notificationService.getPermissionStatus(),
+        notificationService.getPreferences(),
+      ]);
+      setPushPermissionGranted(permission === "granted");
+      setNotificationDaysBeforeExpiry(prefs.daysBeforeExpiry);
+    };
+
+    fetchNotificationSettings().catch(() => {});
+  }, []);
+
 
   if (loadingProfile) {
     return (
@@ -263,6 +280,7 @@ const HomeScreen: React.FC = () => {
   const freshCount = fridgeItems.filter(
     (i) => i.status === ItemStatus.GOOD,
   ).length;
+  const nearExpiryCount = getNearExpiryItems(fridgeItems, notificationDaysBeforeExpiry).length;
   const memberCount = profile.householdMembers.length;
   const toolCount = profile.kitchenTools.length;
 
@@ -364,6 +382,24 @@ const HomeScreen: React.FC = () => {
                 isDark={isDark}
               />
             </View>
+          ) : null}
+
+          {nearExpiryCount > 0 && !pushPermissionGranted ? (
+            <TouchableOpacity
+              style={styles.pushBanner}
+              onPress={() => router.push(ROUTES.appTabProfile)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Configurar avisos de caducidad"
+            >
+              <View style={styles.alertBannerIconWrap}>
+                <Sparkles size={18} color={COLORS.accent} strokeWidth={2.5} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.pushBannerTitle, isDark && { color: "#FFEFD1" }]}>Activa avisos de caducidad</Text>
+                <Text style={[styles.pushBannerSub, isDark && { color: "#FFEFD1", opacity: 0.82 }]}>Tienes {nearExpiryCount} producto{nearExpiryCount === 1 ? "" : "s"} cerca de caducar.</Text>
+              </View>
+            </TouchableOpacity>
           ) : null}
 
           {/* Alerta caducados */}
@@ -759,6 +795,24 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 12,
     fontWeight: "800",
+  },
+  pushBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: COLORS.accent + "16",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.accent + "44",
+  },
+  pushBannerTitle: { fontSize: 14, fontWeight: "800", color: "#8C5600" },
+  pushBannerSub: {
+    fontSize: 12,
+    color: "#8C5600",
+    opacity: 0.72,
+    marginTop: 2,
   },
 
   // Section header

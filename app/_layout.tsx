@@ -6,6 +6,7 @@ import { setupInterceptors } from '@/src/adapters/external/api/authInterceptor';
 import { AuthContext } from '@/src/adapters/ui/navigation/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ROUTES } from '@/src/adapters/ui/navigation/routes';
+import { notificationService } from '@/src/adapters/external/notifications/NotificationService';
 import * as NavigationBar from 'expo-navigation-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -50,6 +51,22 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     initAuth();
   }, [logout]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    notificationService.bootstrap().catch(() => {});
+    const responseSub = notificationService.addNotificationResponseListener((response) => {
+      const route = response.notification.request.content.data?.route;
+      if (route === ROUTES.appTabFridge) {
+        router.push(ROUTES.appTabFridge);
+      }
+    });
+
+    return () => {
+      responseSub.remove();
+    };
+  }, [isLoggedIn, router]);
 
   useEffect(() => {
     if (isLoading) return;
