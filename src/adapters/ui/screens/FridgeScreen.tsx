@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ActivityIndicator,
@@ -10,7 +10,6 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -33,52 +32,19 @@ import {
 import { FridgeItem, ItemStatus } from '../../../core/domain/fridgeItem.types';
 import { COLORS } from '../../../shared/theme/colors';
 import { useTheme } from '../../../shared/theme/ThemeProvider';
+import { useNetwork } from '../../../shared/network/NetworkProvider';
 import { fridgeService } from '../../external/api/FridgeService';
 import { apiClient } from '../../external/api/apiClient';
 import { AppBottomSheet } from '../components/AppBottomSheet';
 import { AppDialog, type AppDialogAction } from '../components/AppDialog';
+import AppStateView from '../components/AppStateView';
+import AppBanner from '../components/AppBanner';
+import AppField from '../components/AppField';
 
 // ─── Constantes de tema ───────────────────────────────────────────────────────
 const FRIDGE_DARK = '#0D1F17';   // verde muy oscuro (panel nevera)
 const FRIDGE_MID = '#1A3826';   // verde oscuro medio
 const ICE_BLUE = '#C8F0DC';   // tinte helado suave
-const DEFAULT_TICKET_STORE_ID = '7c637641-7619-4ce1-9221-758d668fec56';
-
-function extractListPayload(payload: any): any[] {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.content)) return payload.content;
-  return [];
-}
-
-function readStoreId(item: any): string {
-  const candidates = [item?.id, item?.storeId, item?.store_id];
-  const found = candidates.find(
-    (value) => typeof value === 'string' && value.trim().length > 0,
-  );
-  return found ? found.trim() : '';
-}
-
-async function resolveAllowedStoreId(): Promise<{ id: string; source: 'stores' | 'default' }> {
-  try {
-    const response = await apiClient.get('/stores');
-    const rows = extractListPayload(response.data);
-    const firstStoreId = rows.map(readStoreId).find((id) => id.length > 0);
-
-    if (firstStoreId) {
-      return { id: firstStoreId, source: 'stores' };
-    }
-  } catch (error: any) {
-    console.warn('[TicketOCR] No se pudo resolver store desde /stores', {
-      status: error?.response?.status,
-      message: error?.message,
-    });
-  }
-
-  return { id: DEFAULT_TICKET_STORE_ID, source: 'default' };
-}
-
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
   ItemStatus,
@@ -150,6 +116,37 @@ function getExpiryMeta(expirationDate: string, status: ItemStatus) {
     bg: COLORS.primary + '14',
     border: COLORS.primary + '44',
   };
+}
+
+function extractListPayload(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.content)) return payload.content;
+  return [];
+}
+
+function readStoreId(item: any): string {
+  const candidates = [item?.id, item?.storeId, item?.store_id];
+  const found = candidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+  return found ? found.trim() : '';
+}
+
+async function resolveAutoStoreId(): Promise<string> {
+  try {
+    const meResponse = await apiClient.get('/stores/me');
+    const meStoreId = readStoreId(meResponse.data);
+    if (meStoreId) return meStoreId;
+  } catch {
+  }
+
+  try {
+    const response = await apiClient.get('/stores');
+    const firstStoreId = extractListPayload(response.data).map(readStoreId).find((id) => id.length > 0);
+    return firstStoreId || '';
+  } catch {
+    return '';
+  }
 }
 
 function formatDate(value: string): string {
@@ -239,6 +236,8 @@ function ItemCard({
           <TouchableOpacity
             onPress={onEdit} onPressIn={pressIn} onPressOut={pressOut}
             style={styles.cardBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Editar ${item.product}`}
           >
             <Pencil size={14} color={COLORS.primary} strokeWidth={2.6} />
             <Text style={[styles.cardBtnText, { color: COLORS.primary }]}>Editar</Text>
@@ -247,6 +246,8 @@ function ItemCard({
           <TouchableOpacity
             onPress={onDelete} onPressIn={pressIn} onPressOut={pressOut}
             style={styles.cardBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Eliminar ${item.product}`}
           >
             <Trash2 size={14} color={COLORS.error} strokeWidth={2.6} />
             <Text style={[styles.cardBtnText, { color: COLORS.error }]}>Eliminar</Text>
@@ -271,7 +272,6 @@ function TicketModal({
 }) {
   const { isDark, colors } = useTheme();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [storeId, setStoreId] = useState('');
   const [dialog, setDialog] = useState<{
     title: string;
     message: string;
@@ -376,46 +376,27 @@ function TicketModal({
             return payload;
           };
 
-          const trimmedStoreId = storeId.trim();
-          const fallbackStore =
-            trimmedStoreId.length > 0
-              ? { id: trimmedStoreId, source: 'input' as const }
-              : await resolveAllowedStoreId();
-          const effectiveStoreId = fallbackStore.id;
-
           console.log('[TicketOCR] Enviando ticket a backend', {
             endpoint: '/tickets/from-image',
             baseURL: apiClient.defaults.baseURL,
             userId,
-            storeId: effectiveStoreId,
-            usedDefaultStore: trimmedStoreId.length === 0 && fallbackStore.source === 'default',
-            storeIdSource: fallbackStore.source,
             fileField: 'file',
-            storeIdLocation: 'query_param',
             note: 'authorization via interceptor',
           });
 
-          let response;
+          const autoStoreId = await resolveAutoStoreId();
 
-          try {
-            response = await apiClient.post('/tickets/from-image', buildFormData(), {
-              params: {
-                store_id: effectiveStoreId,
-              },
-            });
-          } catch (firstError: any) {
-            const firstStatus = firstError?.response?.status;
-            if (firstStatus === 403 && trimmedStoreId.length === 0) {
-              console.warn('[TicketOCR] 403 con store_id fallback. Reintentando sin store_id', {
-                attemptedStoreId: effectiveStoreId,
-                storeIdSource: fallbackStore.source,
-              });
+          const requestConfig = {
+            timeout: 60000,
+            params: autoStoreId ? { store_id: autoStoreId } : undefined,
+          };
 
-              response = await apiClient.post('/tickets/from-image', buildFormData());
-            } else {
-              throw firstError;
-            }
-          }
+          console.log('[TicketOCR] Request config', {
+            storeIdSent: !!autoStoreId,
+            storeIdSource: autoStoreId ? 'auto' : 'none',
+          });
+
+          const response = await apiClient.post('/tickets/from-image', buildFormData(), requestConfig);
 
           console.log('[TicketOCR] Respuesta backend', {
             status: response.status,
@@ -449,7 +430,6 @@ function TicketModal({
               {
                 label: 'Genial',
                 onPress: () => {
-                  setStoreId('');
                   onClose();
                 },
               },
@@ -519,17 +499,6 @@ function TicketModal({
                   Haz una foto a tu ticket y GastroMind añadirá los productos automáticamente a tu nevera.
                 </Text>
 
-                <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Store ID (opcional)</Text>
-                <TextInput
-                  style={[styles.fieldInput, isDark && { color: COLORS.white, backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}
-                  value={storeId}
-                  onChangeText={setStoreId}
-                  placeholder="Ej. market-001"
-                  placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '44'}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                
                 <TouchableOpacity 
                   style={styles.ticketCameraBtn} 
                   onPress={() => handlePickImage(true)}
@@ -594,25 +563,32 @@ function ItemFormModal({
     >
 
           <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-            <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Nombre</Text>
-            <TextInput
-              style={[styles.fieldInput, isDark && { color: COLORS.white, backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]} value={productName}
-              onChangeText={setProductName} placeholder="Ej. Leche entera"
-              placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '44'}
+            <AppField
+              label="Nombre"
+              value={productName}
+              onChangeText={setProductName}
+              placeholder="Ej. Leche entera"
+              isDark={isDark}
+              accessibilityLabel="Nombre del producto"
             />
 
-            <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Cantidad</Text>
-            <TextInput
-              style={[styles.fieldInput, isDark && { color: COLORS.white, backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]} keyboardType="numeric"
-              value={quantity} onChangeText={setQuantity}
-              placeholder="0.0" placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '44'}
+            <AppField
+              label="Cantidad"
+              value={quantity}
+              onChangeText={setQuantity}
+              placeholder="0.0"
+              keyboardType="numeric"
+              isDark={isDark}
+              accessibilityLabel="Cantidad del producto"
             />
 
-            <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Fecha de caducidad</Text>
-            <TextInput
-              style={[styles.fieldInput, isDark && { color: COLORS.white, backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]} value={expDate}
-              onChangeText={setExpDate} placeholder="YYYY-MM-DD"
-              placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '44'}
+            <AppField
+              label="Fecha de caducidad"
+              value={expDate}
+              onChangeText={setExpDate}
+              placeholder="YYYY-MM-DD"
+              isDark={isDark}
+              accessibilityLabel="Fecha de caducidad"
             />
 
             <Text style={[styles.fieldLabel, isDark && { color: COLORS.white, opacity: 0.82 }]}>Estado</Text>
@@ -665,6 +641,7 @@ function ItemFormModal({
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 export default function FridgeApp() {
   const { isDark } = useTheme();
+  const { isOnline } = useNetwork();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<FridgeItem[]>([]);
   const [ticketUserId, setTicketUserId] = useState('');
@@ -683,6 +660,8 @@ export default function FridgeApp() {
     variant?: 'info' | 'success' | 'warning' | 'danger';
     actions: AppDialogAction[];
   } | null>(null);
+  const [loadingScreen, setLoadingScreen] = useState(true);
+  const [screenError, setScreenError] = useState<string | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -701,19 +680,23 @@ export default function FridgeApp() {
     });
   };
 
-  useEffect(() => {
-    loadInitialData();
-    Animated.timing(fadeAnim, {
-      toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const loadInitialData = async () => {
-    await refresh();
-    await refreshTicketUserId();
+  const getErrorMessage = (error: any, fallback: string): string => {
+    return error?.response?.data?.message || error?.message || fallback;
   };
 
-  const refreshTicketUserId = async () => {
+  const refresh = useCallback(async () => {
+    try {
+      const data = await fridgeService.getAll();
+      setItems(data);
+      setScreenError(null);
+    } catch (error: any) {
+      const message = getErrorMessage(error, 'No pudimos cargar tu nevera.');
+      setScreenError(message);
+      throw error;
+    }
+  }, []);
+
+  const refreshTicketUserId = useCallback(async () => {
     try {
       const id = await getUserIdFromMe();
       setTicketUserId(id);
@@ -721,27 +704,52 @@ export default function FridgeApp() {
       console.error('Error fetching /users/me user id:', error);
       setTicketUserId('');
     }
-  };
+  }, []);
+
+  const loadInitialData = useCallback(async () => {
+    setLoadingScreen(true);
+    setScreenError(null);
+    try {
+      await Promise.all([refresh(), refreshTicketUserId()]);
+    } catch {
+    } finally {
+      setLoadingScreen(false);
+    }
+  }, [refresh, refreshTicketUserId]);
+
+  useEffect(() => {
+    loadInitialData();
+    Animated.timing(fadeAnim, {
+      toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }).start();
+  }, [fadeAnim, loadInitialData]);
 
   const openTicketModal = async () => {
+    if (!isOnline) {
+      setScreenError('Sin internet no se puede importar tickets.');
+      return;
+    }
     if (!ticketUserId) {
       await refreshTicketUserId();
     }
     setShowTicket(true);
   };
 
-  const refresh = async () => {
-    const data = await fridgeService.getAll();
-    setItems(data);
-  };
-
   const openAdd = () => {
+    if (!isOnline) {
+      setScreenError('Sin internet no se pueden anadir productos.');
+      return;
+    }
     setEditingId(null); setProductName(''); setQuantity('');
     setExpDate('2026-12-31'); setStatus(ItemStatus.GOOD);
     setShowForm(true);
   };
 
   const openEdit = (item: FridgeItem) => {
+    if (!isOnline) {
+      setScreenError('Sin internet no se pueden editar productos.');
+      return;
+    }
     setEditingId(item.id); setProductName(item.product);
     setQuantity(item.quantity.toString()); setExpDate(item.expirationDate);
     setStatus(item.status);
@@ -749,6 +757,10 @@ export default function FridgeApp() {
   };
 
   const handleSave = async () => {
+    if (!isOnline) {
+      setScreenError('Sin internet no se pueden guardar cambios en la nevera.');
+      return;
+    }
     if (!productName.trim()) return;
     const parsedQty = parseFloat(quantity);
     const validQty = (isNaN(parsedQty) || parsedQty <= 0) ? 1 : parsedQty;
@@ -759,16 +771,51 @@ export default function FridgeApp() {
       status,
       fridgeId: 'MAIN',
     };
+    const previousItems = items;
+
     if (editingId) {
-      await fridgeService.update(editingId, data);
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === editingId
+            ? { ...item, product: data.product, quantity: data.quantity, expirationDate: data.expirationDate, status: data.status }
+            : item,
+        ),
+      );
     } else {
-      await fridgeService.create(data);
+      const optimisticItem: FridgeItem = {
+        id: `temp-${Date.now()}`,
+        product: data.product,
+        quantity: data.quantity,
+        expirationDate: data.expirationDate,
+        status: data.status,
+        fridgeId: 'MAIN',
+      };
+      setItems((prev) => [optimisticItem, ...prev]);
     }
+
     setShowForm(false);
-    refresh();
+    setScreenError(null);
+
+    try {
+      if (editingId) {
+        await fridgeService.update(editingId, data);
+      } else {
+        await fridgeService.create(data);
+      }
+    } catch (error: any) {
+      setItems(previousItems);
+      const message = getErrorMessage(error, 'No se pudo guardar el producto.');
+      setScreenError(message);
+    } finally {
+      refresh().catch(() => {});
+    }
   };
 
   const handleDelete = (item: FridgeItem) => {
+    if (!isOnline) {
+      setScreenError('Sin internet no se pueden eliminar productos.');
+      return;
+    }
     showDialog({
       title: 'Eliminar producto',
       message: `¿Eliminar "${item.product}"?`,
@@ -780,8 +827,17 @@ export default function FridgeApp() {
           tone: 'danger',
           onPress: async () => {
             closeDialog();
-            await fridgeService.delete(item.id);
-            refresh();
+            const previousItems = items;
+            setItems((prev) => prev.filter((current) => current.id !== item.id));
+            try {
+              await fridgeService.delete(item.id);
+            } catch (error: any) {
+              setItems(previousItems);
+              const message = getErrorMessage(error, 'No se pudo eliminar el producto.');
+              setScreenError(message);
+            } finally {
+              refresh().catch(() => {});
+            }
           },
         },
       ],
@@ -801,6 +857,30 @@ export default function FridgeApp() {
     expired: items.filter(i => i.status === ItemStatus.EXPIRED).length,
   };
 
+  if (loadingScreen) {
+    return (
+      <AppStateView
+        variant="loading"
+        title="Cargando nevera"
+        message="Estamos trayendo tus productos."
+        isDark={isDark}
+      />
+    );
+  }
+
+  if (screenError && items.length === 0) {
+    return (
+      <AppStateView
+        variant="error"
+        title="No se pudo cargar la nevera"
+        message={screenError}
+        actionLabel="Reintentar"
+        onAction={loadInitialData}
+        isDark={isDark}
+      />
+    );
+  }
+
   return (
     <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}>
       <StatusBar
@@ -812,13 +892,13 @@ export default function FridgeApp() {
       <View style={styles.ambientOrbB} />
 
       {/* ══ FRIDGE PANEL HEADER ══ */}
-      <View
-        style={[
-          styles.fridgeHeader,
-          isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
-          { paddingTop: Math.max(insets.top + 12, Platform.OS === 'ios' ? 58 : 44) },
-        ]}
-      >
+        <View
+          style={[
+            styles.fridgeHeader,
+            isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
+            { paddingTop: Math.max(insets.top + 8, Platform.OS === 'ios' ? 52 : 40) },
+          ]}
+        >
         {/* Top bar */}
         <View style={styles.fridgeTopBar}>
           <View style={styles.fridgeTopBarLeft}>
@@ -843,13 +923,25 @@ export default function FridgeApp() {
         {/* Action buttons */}
         <View style={styles.headerActions}>
           {/* Ticket button */}
-          <TouchableOpacity style={styles.ticketBtn} onPress={openTicketModal}>
+          <TouchableOpacity
+            style={styles.ticketBtn}
+            onPress={openTicketModal}
+            accessibilityRole="button"
+            accessibilityLabel="Importar ticket"
+            disabled={!isOnline}
+          >
             <Ticket size={15} color={ICE_BLUE} strokeWidth={2.5} />
             <Text style={styles.ticketBtnText}>Importar ticket</Text>
           </TouchableOpacity>
 
           {/* Add button */}
-          <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={openAdd}
+            accessibilityRole="button"
+            accessibilityLabel="Anadir producto"
+            disabled={!isOnline}
+          >
             <Plus size={15} color={COLORS.white} strokeWidth={2.9} />
             <Text style={styles.addBtnText}>Añadir</Text>
           </TouchableOpacity>
@@ -858,7 +950,7 @@ export default function FridgeApp() {
 
       {/* ══ FRIDGE BODY ══ */}
       <View style={[styles.fridgeBody, isDark && { backgroundColor: '#0C100D' }]}>
-        <Animated.View style={[styles.listContainer, { opacity: fadeAnim }]}>
+        <Animated.View style={[styles.listContainer, { opacity: fadeAnim }]}> 
           <FlatList
             style={styles.list}
             data={filtered}
@@ -873,20 +965,56 @@ export default function FridgeApp() {
             )}
             ListHeaderComponent={(
               <>
-                <View style={[styles.searchWrap, isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}> 
-                  <Search size={15} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.6} />
-                  <TextInput
-                    style={[styles.searchInput, isDark && { color: COLORS.white }]}
-                    placeholder="Buscar producto..."
-                    placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '55'}
-                    value={search}
-                    onChangeText={setSearch}
-                  />
-                  {search.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearch('')}>
+                {screenError ? (
+                  <View style={styles.bannerWrap}>
+                    <AppBanner
+                      variant="error"
+                      title="Actualizacion pendiente"
+                      message={screenError}
+                      isDark={isDark}
+                      onClose={() => setScreenError(null)}
+                    />
+                  </View>
+                ) : null}
+
+                <AppField
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Buscar producto..."
+                  isDark={isDark}
+                  accessibilityLabel="Buscar producto"
+                  wrapperStyle={{ marginBottom: 0 }}
+                  inputWrapStyle={[styles.searchWrap, isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}
+                  inputStyle={[styles.searchInput, isDark && { color: COLORS.white }]}
+                  placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '55'}
+                  leftNode={<Search size={15} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.6} />}
+                  rightNode={search.length > 0 ? (
+                    <TouchableOpacity
+                      onPress={() => setSearch('')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Limpiar busqueda"
+                    >
                       <X size={16} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.8} />
                     </TouchableOpacity>
-                  )}
+                  ) : undefined}
+                />
+
+                <View style={styles.listHeaderRow}>
+                  <Text style={[styles.listHeaderTitle, isDark && { color: COLORS.white, opacity: 0.84 }]}>Productos</Text>
+                  {activeFilter !== 'ALL' || search.trim().length > 0 ? (
+                    <TouchableOpacity
+                      style={styles.clearListFiltersBtn}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        setActiveFilter('ALL');
+                        setSearch('');
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Limpiar busqueda y filtros"
+                    >
+                      <Text style={styles.clearListFiltersText}>Limpiar</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
 
                 <ScrollView
@@ -902,6 +1030,8 @@ export default function FridgeApp() {
                       isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
                       activeFilter === 'ALL' && styles.filterPillActive,
                     ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Filtrar todos los productos"
                   >
                     <Search
                       size={14}
@@ -932,6 +1062,8 @@ export default function FridgeApp() {
                           isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
                           active && { backgroundColor: cfg.color, borderColor: cfg.color },
                         ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Filtrar ${cfg.label}`}
                       >
                         <FilterIcon
                           size={14}
@@ -1037,8 +1169,8 @@ const styles = StyleSheet.create({
   // ── Fridge Header (top panel)
   fridgeHeader: {
     backgroundColor: FRIDGE_DARK,
-    paddingHorizontal: 22,
-    paddingBottom: 22,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
     borderBottomLeftRadius: 34,
     borderBottomRightRadius: 34,
     borderWidth: 1,
@@ -1047,7 +1179,7 @@ const styles = StyleSheet.create({
   },
   fridgeTopBar: {
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 12,
+    alignItems: 'center', marginBottom: 6,
   },
   fridgeTopBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   fridgeLed: {
@@ -1058,23 +1190,23 @@ const styles = StyleSheet.create({
       android: { elevation: 2 },
     }),
   },
-  fridgeHeaderLabel: { color: ICE_BLUE, fontSize: 11, fontWeight: '700', letterSpacing: 1.1, opacity: 0.82, textTransform: 'uppercase' },
+  fridgeHeaderLabel: { color: ICE_BLUE, fontSize: 10, fontWeight: '700', letterSpacing: 1, opacity: 0.82, textTransform: 'uppercase' },
   fridgeTempBadge: {
     backgroundColor: FRIDGE_MID, borderRadius: 20,
-    paddingHorizontal: 12, paddingVertical: 5,
+    paddingHorizontal: 10, paddingVertical: 4,
     borderWidth: 1, borderColor: COLORS.primary + '40',
   },
-  fridgeTempText: { color: ICE_BLUE, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
+  fridgeTempText: { color: ICE_BLUE, fontSize: 12, fontWeight: '700', letterSpacing: 0.4 },
 
   fridgeTitle: {
-    fontSize: 32, fontWeight: '800', color: '#FFFFFF',
-    letterSpacing: -0.9, marginBottom: 14,
+    fontSize: 26, fontWeight: '800', color: '#FFFFFF',
+    letterSpacing: -0.7, marginBottom: 7,
   },
 
   // Stats
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  statsRow: { flexDirection: 'row', gap: 7, marginBottom: 8 },
   statChip: {
-    flex: 1, alignItems: 'center', paddingVertical: 10,
+    flex: 1, alignItems: 'center', paddingVertical: 8,
     borderRadius: 14, borderWidth: 1.5,
   },
   statIconWrap: {
@@ -1085,36 +1217,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 4,
   },
-  statCount: { fontSize: 20, fontWeight: '800' },
-  statLabel: { fontSize: 10, color: ICE_BLUE, opacity: 0.7, fontWeight: '600' },
+  statCount: { fontSize: 18, fontWeight: '800' },
+  statLabel: { fontSize: 9, color: ICE_BLUE, opacity: 0.7, fontWeight: '600' },
 
   // Header action buttons
-  headerActions: { flexDirection: 'row', gap: 10 },
+  headerActions: { flexDirection: 'row', gap: 8 },
   ticketBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 7, paddingVertical: 13,
+    gap: 6, paddingVertical: 10,
     backgroundColor: FRIDGE_MID,
     borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.primary + '40',
   },
-  ticketBtnText: { color: ICE_BLUE, fontWeight: '700', fontSize: 14 },
+  ticketBtnText: { color: ICE_BLUE, fontWeight: '700', fontSize: 13 },
   addBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 13,
+    gap: 6,
+    paddingVertical: 10,
     backgroundColor: COLORS.primary,
     borderRadius: 14,
     ...SHADOW_PRIMARY,
   },
-  addBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 15, letterSpacing: 0.3 },
+  addBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 14, letterSpacing: 0.2 },
 
   // ── Fridge body
   fridgeBody: {
     flex: 1,
-    paddingHorizontal: 18,
-    paddingTop: 14,
+    paddingHorizontal: 14,
+    paddingTop: 8,
     paddingBottom: 6,
   },
 
@@ -1134,17 +1266,47 @@ const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.white,
-    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 11,
-    marginBottom: 8,
+    borderRadius: 13, paddingHorizontal: 11, paddingVertical: 8,
+    marginBottom: 5,
     borderWidth: 1,
     borderColor: COLORS.primary + '16',
     ...SHADOW_SM,
   },
-  searchInput: { flex: 1, fontSize: 15, color: COLORS.text },
+  searchInput: { flex: 1, fontSize: 14, color: COLORS.text },
+  listHeaderRow: {
+    marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  listHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.text,
+    opacity: 0.6,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  clearListFiltersBtn: {
+    minHeight: 36,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+  },
+  clearListFiltersText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '800',
+  },
   filtersScroller: {
     flexGrow: 0,
     maxHeight: 40,
-    marginBottom: 14,
+    marginBottom: 10,
+  },
+  bannerWrap: {
+    marginBottom: 10,
   },
   filtersRow: { gap: 8, paddingBottom: 0, paddingRight: 6 },
   filterPill: {
@@ -1389,10 +1551,6 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 11, fontWeight: '700', color: COLORS.text,
     opacity: 0.5, marginBottom: 7, letterSpacing: 0.8, textTransform: 'uppercase',
-  },
-  fieldInput: {
-    backgroundColor: '#EEF8F2', borderRadius: 12,
-    padding: 14, fontSize: 16, color: COLORS.text, marginBottom: 18,
   },
   statusRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   statusOpt: {

@@ -8,12 +8,13 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
   CookingPot,
   House,
   LogOut,
@@ -38,6 +39,7 @@ import {
 } from "../../../core/domain/profile.types";
 import { COLORS } from "../../../shared/theme/colors";
 import { useTheme } from "../../../shared/theme/ThemeProvider";
+import { useNetwork } from "../../../shared/network/NetworkProvider";
 import {
   BackendAllergen,
   profileService,
@@ -46,6 +48,9 @@ import * as Clipboard from "expo-clipboard";
 import { apiClient } from "../../external/api/apiClient";
 import { AppBottomSheet } from "../components/AppBottomSheet";
 import { AppDialog, type AppDialogAction } from "../components/AppDialog";
+import AppBanner from "../components/AppBanner";
+import AppActionBar from "../components/AppActionBar";
+import AppField from "../components/AppField";
 import { useAuth } from "../hooks/useAuth";
 
 // ─── Constantes de diseño ─────────────────────────────────────────────────────
@@ -326,6 +331,7 @@ function AllergenPillBackend({
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
+  const { isOnline } = useNetwork();
   const { mode, toggleMode } = useTheme();
   const isDarkMode = mode === "dark";
 
@@ -362,6 +368,8 @@ export default function ProfileScreen() {
     variant?: "info" | "success" | "warning" | "danger";
     actions: AppDialogAction[];
   } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<"home" | "tools" | "allergens">("home");
 
   const closeDialog = () => setDialog(null);
   const showDialog = (config: {
@@ -385,6 +393,7 @@ export default function ProfileScreen() {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [profileData, allergens] = await Promise.all([
         profileService.get(),
@@ -404,6 +413,11 @@ export default function ProfileScreen() {
       setDraftAllergenNames(normalizedNames);
     } catch (e) {
       console.error("Error loading profile data:", e);
+      const message =
+        (e as any)?.response?.data?.message ||
+        (e as any)?.message ||
+        "No se pudo cargar el perfil.";
+      setLoadError(message);
     } finally {
       setLoading(false);
     }
@@ -426,8 +440,14 @@ export default function ProfileScreen() {
       if (!isEditingAllergens) {
         setDraftAllergenNames(names);
       }
+      setLoadError(null);
     } catch (e) {
       console.error("Error refreshing profile:", e);
+      const message =
+        (e as any)?.response?.data?.message ||
+        (e as any)?.message ||
+        "No se pudo actualizar el perfil.";
+      setLoadError(message);
     }
   };
 
@@ -449,28 +469,30 @@ export default function ProfileScreen() {
   };
 
   const handleToggleToolsEditMode = async () => {
+    if (!isOnline) {
+      setLoadError("Sin internet no se pueden guardar cambios de utensilios.");
+      return;
+    }
     if (!isEditingTools) {
       setDraftKitchenTools(profile.kitchenTools);
       setIsEditingTools(true);
       return;
     }
 
+    const previousTools = profile.kitchenTools;
     setSavingSection("tools");
+    setProfile((prev) => ({ ...prev, kitchenTools: draftKitchenTools }));
+    setIsEditingTools(false);
     try {
       await profileService.updateAppliancesBatch(draftKitchenTools);
-      setIsEditingTools(false);
       showDialog({
         title: "Utensilios actualizados",
         message: "Tus cambios de utensilios se han guardado.",
         variant: "success",
       });
-
-      try {
-        await refresh();
-      } catch (refreshError) {
-        console.error("Error refreshing profile after saving appliances:", refreshError);
-      }
     } catch (error) {
+      setProfile((prev) => ({ ...prev, kitchenTools: previousTools }));
+      setIsEditingTools(true);
       console.error("Error saving appliances:", error);
       showDialog({
         title: "Error",
@@ -478,6 +500,9 @@ export default function ProfileScreen() {
         variant: "danger",
       });
     } finally {
+      refresh().catch((refreshError) => {
+        console.error("Error refreshing profile after saving appliances:", refreshError);
+      });
       setSavingSection(null);
     }
   };
@@ -488,6 +513,10 @@ export default function ProfileScreen() {
   };
 
   const handleToggleAllergensEditMode = async () => {
+    if (!isOnline) {
+      setLoadError("Sin internet no se pueden guardar cambios de alergias.");
+      return;
+    }
     if (!isEditingAllergens) {
       setDraftAllergenNames(userAllergenNames);
       setIsEditingAllergens(true);
@@ -500,22 +529,20 @@ export default function ProfileScreen() {
       )
       .map((allergen) => allergen.id);
 
+    const previousAllergenNames = userAllergenNames;
     setSavingSection("allergens");
+    setUserAllergenNames(draftAllergenNames);
+    setIsEditingAllergens(false);
     try {
       await profileService.updateAllergensBatch(selectedAllergenIds);
-      setIsEditingAllergens(false);
       showDialog({
         title: "Alergenos actualizados",
         message: "Tus cambios de alergias se han guardado.",
         variant: "success",
       });
-
-      try {
-        await refresh();
-      } catch (refreshError) {
-        console.error("Error refreshing profile after saving allergens:", refreshError);
-      }
     } catch (error) {
+      setUserAllergenNames(previousAllergenNames);
+      setIsEditingAllergens(true);
       console.error("Error saving allergens:", error);
       showDialog({
         title: "Error",
@@ -523,6 +550,9 @@ export default function ProfileScreen() {
         variant: "danger",
       });
     } finally {
+      refresh().catch((refreshError) => {
+        console.error("Error refreshing profile after saving allergens:", refreshError);
+      });
       setSavingSection(null);
     }
   };
@@ -534,6 +564,10 @@ export default function ProfileScreen() {
 
   // ── Add custom allergen ──
   const handleAddCustomAllergen = async () => {
+    if (!isOnline) {
+      setLoadError("Sin internet no se pueden anadir alergenos.");
+      return;
+    }
     if (!newAllergenName.trim()) return;
     setShowAddAllergen(false);
     const name = newAllergenName.trim();
@@ -549,6 +583,10 @@ export default function ProfileScreen() {
 
   // ── Remove member ──
   const handleRemoveMember = (id: string, name: string) => {
+    if (!isOnline) {
+      setLoadError("Sin internet no se pueden gestionar miembros del hogar.");
+      return;
+    }
     showDialog({
       title: "Eliminar miembro",
       message: `¿Eliminar a "${name}" del hogar?`,
@@ -560,10 +598,15 @@ export default function ProfileScreen() {
           tone: "danger",
           onPress: async () => {
             closeDialog();
+            const previousMembers = profile.householdMembers;
+            setProfile((prev) => ({
+              ...prev,
+              householdMembers: prev.householdMembers.filter((member) => member.id !== id),
+            }));
             try {
               await profileService.removeMember(id);
-              refresh();
             } catch (error: any) {
+              setProfile((prev) => ({ ...prev, householdMembers: previousMembers }));
               const status = error?.response?.status;
               if (status === 403) {
                 showDialog({
@@ -579,6 +622,8 @@ export default function ProfileScreen() {
                 message: "No se pudo expulsar al miembro del hogar.",
                 variant: "danger",
               });
+            } finally {
+              refresh().catch(() => {});
             }
           },
         },
@@ -612,6 +657,10 @@ export default function ProfileScreen() {
   };
 
   const handleGenerateInviteToken = async () => {
+    if (!isOnline) {
+      setLoadError("Sin internet no se puede generar invitaciones.");
+      return;
+    }
     if (!profile.householdId) {
       showDialog({
         title: "Error",
@@ -683,6 +732,10 @@ export default function ProfileScreen() {
   };
 
   const handleChangeHouse = async () => {
+    if (!isOnline) {
+      setLoadError("Sin internet no se puede cambiar de hogar.");
+      return;
+    }
     const token = houseActionValue.trim();
     if (!token) return;
 
@@ -768,7 +821,19 @@ export default function ProfileScreen() {
           },
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews
       >
+        {loadError ? (
+          <AppBanner
+            variant="error"
+            title="No se pudo actualizar perfil"
+            message={loadError}
+            isDark={isDarkMode}
+            onClose={() => setLoadError(null)}
+          />
+        ) : null}
+
         <View style={styles.topBand}>
           <View style={styles.topBandGlow} />
           <View style={styles.topBandGlowSecondary} />
@@ -837,7 +902,7 @@ export default function ProfileScreen() {
         <View style={styles.quickActionGrid}>
           <TouchableOpacity
             onPress={handleGenerateInviteToken}
-            disabled={houseActionLoading !== null}
+            disabled={houseActionLoading !== null || !isOnline}
             style={[
               styles.quickActionBtn,
               houseActionLoading !== null && styles.houseActionBtnDisabled,
@@ -858,7 +923,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             onPress={openChangeHouseModal}
-            disabled={houseActionLoading !== null}
+            disabled={houseActionLoading !== null || !isOnline}
             style={[styles.quickActionBtn, styles.quickActionBtnSecondary]}
             accessibilityRole="button"
             accessibilityLabel="Cambiar de casa"
@@ -909,12 +974,25 @@ export default function ProfileScreen() {
         </View>
 
         <View style={[styles.section, isDarkMode && styles.sectionDark]}>
-          <View style={styles.sectionHeader}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setExpandedSection(expandedSection === "home" ? "tools" : "home")}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Alternar seccion Mi hogar"
+          >
             <View style={[styles.sectionTitleWrap, isDarkMode && styles.sectionTitleWrapDark]}>
               <House size={17} color={COLORS.primary} strokeWidth={2.4} />
               <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Mi hogar</Text>
             </View>
-          </View>
+            {expandedSection === "home" ? (
+              <ChevronUp size={18} color={isDarkMode ? COLORS.white : COLORS.text} strokeWidth={2.5} />
+            ) : (
+              <ChevronDown size={18} color={isDarkMode ? COLORS.white : COLORS.text} strokeWidth={2.5} />
+            )}
+          </TouchableOpacity>
+          {expandedSection === "home" ? (
+            <>
           <Text style={[styles.sectionSub, isDarkMode && styles.sectionSubDark]}>
             {profile.householdMembers.length === 0
               ? "No hay miembros en el hogar"
@@ -974,10 +1052,18 @@ export default function ProfileScreen() {
               ))}
             </View>
           )}
+            </>
+          ) : null}
         </View>
 
         <View style={[styles.section, isDarkMode && styles.sectionDark]}>
-          <View style={styles.sectionHeader}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setExpandedSection(expandedSection === "tools" ? "allergens" : "tools")}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Alternar seccion Utensilios"
+          >
             <View style={[styles.sectionTitleWrap, isDarkMode && styles.sectionTitleWrapDark]}>
               <UtensilsCrossed size={17} color={COLORS.primary} strokeWidth={2.4} />
               <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Utensilios de cocina</Text>
@@ -987,51 +1073,28 @@ export default function ProfileScreen() {
                 {activeToolCount} / {toolList.length}
               </Text>
             </View>
-          </View>
+            {expandedSection === "tools" ? (
+              <ChevronUp size={18} color={isDarkMode ? COLORS.white : COLORS.text} strokeWidth={2.5} />
+            ) : (
+              <ChevronDown size={18} color={isDarkMode ? COLORS.white : COLORS.text} strokeWidth={2.5} />
+            )}
+          </TouchableOpacity>
+          {expandedSection === "tools" ? (
+            <>
           <Text style={[styles.sectionSub, isDarkMode && styles.sectionSubDark]}>
             Selecciona los que tienes disponibles. Se usarán para personalizar
             tus recetas.
           </Text>
 
-          <View style={styles.sectionActionRow}>
-            <TouchableOpacity
-              onPress={handleToggleToolsEditMode}
-              disabled={savingSection !== null}
-              style={[
-                styles.sectionActionBtn,
-                styles.sectionActionBtnPrimary,
-                savingSection !== null && styles.sectionActionBtnDisabled,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={
-                isEditingTools ? "Guardar utensilios" : "Editar utensilios"
-              }
-            >
-              {savingSection === "tools" ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <Text style={styles.sectionActionBtnPrimaryText}>
-                  {isEditingTools ? "Guardar utensilios" : "Editar utensilios"}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {isEditingTools && (
-              <TouchableOpacity
-                onPress={handleCancelToolsEdit}
-                disabled={savingSection !== null}
-                style={[
-                  styles.sectionActionBtn,
-                  styles.sectionActionBtnSecondary,
-                  savingSection !== null && styles.sectionActionBtnDisabled,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Cancelar edicion de utensilios"
-              >
-                <Text style={styles.sectionActionBtnSecondaryText}>Cancelar</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <AppActionBar
+            primaryLabel={isEditingTools ? "Guardar utensilios" : "Editar utensilios"}
+            onPrimary={handleToggleToolsEditMode}
+            loading={savingSection === "tools"}
+            disabled={savingSection !== null || !isOnline}
+            secondaryLabel={isEditingTools ? "Cancelar" : undefined}
+            onSecondary={isEditingTools ? handleCancelToolsEdit : undefined}
+            isDark={isDarkMode}
+          />
 
           <View style={styles.toolGrid}>
             {toolList.map((tool) => (
@@ -1045,10 +1108,18 @@ export default function ProfileScreen() {
               />
             ))}
           </View>
+            </>
+          ) : null}
         </View>
 
         <View style={[styles.section, isDarkMode && styles.sectionDark]}>
-          <View style={styles.sectionHeader}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setExpandedSection(expandedSection === "allergens" ? "home" : "allergens")}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Alternar seccion Alergias"
+          >
             <View style={[styles.sectionTitleWrap, isDarkMode && styles.sectionTitleWrapDark]}>
               <ShieldAlert size={17} color={COLORS.error} strokeWidth={2.4} />
               <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Alergias e intolerancias</Text>
@@ -1062,54 +1133,32 @@ export default function ProfileScreen() {
                 },
               ]}
             >
-              <Text style={[styles.sectionBadgeText, { color: COLORS.error }]}>
+              <Text style={[styles.sectionBadgeText, { color: COLORS.error }]}> 
                 {activeAllergenCount}
               </Text>
             </View>
-          </View>
+            {expandedSection === "allergens" ? (
+              <ChevronUp size={18} color={isDarkMode ? COLORS.white : COLORS.text} strokeWidth={2.5} />
+            ) : (
+              <ChevronDown size={18} color={isDarkMode ? COLORS.white : COLORS.text} strokeWidth={2.5} />
+            )}
+          </TouchableOpacity>
+          {expandedSection === "allergens" ? (
+            <>
           <Text style={[styles.sectionSub, isDarkMode && styles.sectionSubDark]}>
             Marca los ingredientes que debes evitar.
           </Text>
 
-          <View style={styles.sectionActionRow}>
-            <TouchableOpacity
-              onPress={handleToggleAllergensEditMode}
-              disabled={savingSection !== null}
-              style={[
-                styles.sectionActionBtn,
-                styles.sectionActionBtnDanger,
-                savingSection !== null && styles.sectionActionBtnDisabled,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={
-                isEditingAllergens ? "Guardar alergenos" : "Editar alergenos"
-              }
-            >
-              {savingSection === "allergens" ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <Text style={styles.sectionActionBtnPrimaryText}>
-                  {isEditingAllergens ? "Guardar alergenos" : "Editar alergenos"}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {isEditingAllergens && (
-              <TouchableOpacity
-                onPress={handleCancelAllergensEdit}
-                disabled={savingSection !== null}
-                style={[
-                  styles.sectionActionBtn,
-                  styles.sectionActionBtnSecondary,
-                  savingSection !== null && styles.sectionActionBtnDisabled,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Cancelar edicion de alergenos"
-              >
-                <Text style={styles.sectionActionBtnSecondaryText}>Cancelar</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <AppActionBar
+            primaryLabel={isEditingAllergens ? "Guardar alergenos" : "Editar alergenos"}
+            onPrimary={handleToggleAllergensEditMode}
+            loading={savingSection === "allergens"}
+            disabled={savingSection !== null || !isOnline}
+            secondaryLabel={isEditingAllergens ? "Cancelar" : undefined}
+            onSecondary={isEditingAllergens ? handleCancelAllergensEdit : undefined}
+            primaryTone="danger"
+            isDark={isDarkMode}
+          />
 
           <View style={styles.toolGrid}>
             {allAllergens.map((allergen) => (
@@ -1155,6 +1204,8 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             )}
           </View>
+            </>
+          ) : null}
         </View>
 
         <View style={{ height: 100 }} />
@@ -1168,14 +1219,13 @@ export default function ProfileScreen() {
         icon={ShieldAlert}
         iconColor={COLORS.error}
       >
-        <Text style={[styles.fieldLabel, isDarkMode && { color: COLORS.white, opacity: 0.82 }]}>Nombre del ingrediente</Text>
-        <TextInput
-          style={[styles.fieldInput, isDarkMode && { color: COLORS.white, backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}
+        <AppField
+          label="Nombre del ingrediente"
           value={newAllergenName}
           onChangeText={setNewAllergenName}
           placeholder="Ej. Cacahuete"
-          placeholderTextColor={isDarkMode ? COLORS.white + "66" : COLORS.text + "44"}
-          autoFocus
+          isDark={isDarkMode}
+          accessibilityLabel="Nombre del ingrediente"
           onSubmitEditing={handleAddCustomAllergen}
           returnKeyType="done"
         />
@@ -1207,16 +1257,13 @@ export default function ProfileScreen() {
         title="Cambiar de casa"
         icon={House}
       >
-        <Text style={[styles.fieldLabel, isDarkMode && { color: COLORS.white, opacity: 0.82 }]}>Token de invitacion</Text>
-        <TextInput
-          style={[styles.fieldInput, isDarkMode && { color: COLORS.white, backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}
+        <AppField
+          label="Token de invitacion"
           value={houseActionValue}
           onChangeText={setHouseActionValue}
           placeholder="Ej. ABCD-1234"
-          placeholderTextColor={isDarkMode ? COLORS.white + "66" : COLORS.text + "44"}
-          autoFocus
-          autoCapitalize="none"
-          keyboardType="default"
+          isDark={isDarkMode}
+          accessibilityLabel="Token de invitacion"
           onSubmitEditing={handleChangeHouse}
           returnKeyType="done"
         />
@@ -1371,6 +1418,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   topBandLogoutBtn: {
+    minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -1489,7 +1537,7 @@ const styles = StyleSheet.create({
   },
   quickActionBtn: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 52,
     borderRadius: 14,
     backgroundColor: DARK_GREEN,
     borderWidth: 1,
@@ -1516,7 +1564,7 @@ const styles = StyleSheet.create({
   },
   themeToggleBtn: {
     marginTop: 10,
-    minHeight: 48,
+    minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.forest + "35",
@@ -1932,7 +1980,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   sectionActionBtn: {
-    minHeight: 42,
+    minHeight: 46,
     borderRadius: 12,
     paddingHorizontal: 14,
     justifyContent: "center",
@@ -2051,9 +2099,9 @@ const styles = StyleSheet.create({
   memberRole: { fontSize: 11, color: COLORS.text, opacity: 0.45, marginTop: 1 },
   memberRoleDark: { color: COLORS.white, opacity: 0.68 },
   memberDeleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: COLORS.error + "15",
     justifyContent: "center",
     alignItems: "center",
@@ -2123,23 +2171,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: COLORS.text,
     textAlign: "center",
-  },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.text,
-    opacity: 0.5,
-    marginBottom: 7,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  fieldInput: {
-    backgroundColor: "#EEF8F2",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    color: COLORS.text,
-    marginBottom: 24,
   },
   sheetFooter: { flexDirection: "row", gap: 12, marginBottom: 8 },
   sheetBtnCancel: {

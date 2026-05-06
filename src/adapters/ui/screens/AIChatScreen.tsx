@@ -16,6 +16,8 @@ import { ArrowLeft, Bot, ChefHat, Clock3, Flame, Heart, Wrench } from 'lucide-re
 import { apiClient } from '../../external/api/apiClient';
 import { COLORS } from '../../../shared/theme/colors';
 import { useTheme } from '../../../shared/theme/ThemeProvider';
+import { useNetwork } from '../../../shared/network/NetworkProvider';
+import AppBanner from '../components/AppBanner';
 
 type SuggestionIngredient = {
   productId: string;
@@ -52,6 +54,7 @@ const DARK = '#0D1F17';
 const AIChatScreen: React.FC = () => {
   const { isDark, colors } = useTheme();
   const navigation = useNavigation<any>();
+  const { isOnline } = useNetwork();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +63,10 @@ const AIChatScreen: React.FC = () => {
   const [servingsInput, setServingsInput] = useState('2');
 
   const requestSuggestion = async () => {
+    if (!isOnline) {
+      setError('Sin internet no podemos generar recetas IA ahora mismo.');
+      return;
+    }
     setIsGenerating(true);
     setError(null);
     setSuccess(null);
@@ -100,6 +107,10 @@ const AIChatScreen: React.FC = () => {
   };
 
   const addRecipeToFavorites = async () => {
+    if (!isOnline) {
+      setError('Sin internet no se puede guardar en favoritos ahora mismo.');
+      return;
+    }
     const suggestionId = getSuggestionId(suggestion);
     if (!suggestionId) {
       setError('No llego suggestionId desde la receta sugerida.');
@@ -145,10 +156,19 @@ const AIChatScreen: React.FC = () => {
         <TouchableOpacity style={[styles.backButton, isDark && { backgroundColor: '#1A2E1F' }]} onPress={() => navigation.goBack()}>
           <ArrowLeft size={18} color={isDark ? COLORS.white : DARK} strokeWidth={2.7} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chat de recetas IA</Text>
+        <Text style={styles.headerTitle}>Asistente de recetas IA</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {!isOnline ? (
+          <AppBanner
+            variant="warning"
+            title="Modo sin conexion"
+            message="Puedes ver la pantalla, pero generar y guardar recetas requiere internet."
+            isDark={isDark}
+          />
+        ) : null}
+
         <View style={[styles.botBubble, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
           <Bot size={16} color={COLORS.primary} strokeWidth={2.7} />
           <Text style={[styles.botBubbleText, isDark && { color: COLORS.white, opacity: 0.92 }]}>
@@ -157,7 +177,7 @@ const AIChatScreen: React.FC = () => {
         </View>
 
         <View style={[styles.userQuestionBubble, isDark && { backgroundColor: '#1A2E1F', borderWidth: 1, borderColor: colors.secondary + '66' }]}>
-          <Text style={styles.userQuestionText}>Cuantos comensales son?</Text>
+          <Text style={styles.userQuestionText}>Indica cuantos comensales necesitas</Text>
         </View>
 
         <View style={[styles.servingsCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
@@ -200,23 +220,40 @@ const AIChatScreen: React.FC = () => {
         </View>
 
         <TouchableOpacity
-          style={[styles.generateButton, isGenerating && styles.buttonDisabled]}
+          style={[styles.generateButton, (isGenerating || !isOnline) && styles.buttonDisabled]}
           onPress={requestSuggestion}
           activeOpacity={0.86}
-          disabled={isGenerating}
+          disabled={isGenerating || !isOnline}
+          accessibilityState={{ disabled: isGenerating || !isOnline }}
         >
           {isGenerating ? (
             <ActivityIndicator size="small" color={COLORS.white} />
           ) : (
             <>
               <ChefHat size={15} color={COLORS.white} strokeWidth={2.7} />
-              <Text style={styles.generateButtonText}>Pedir sugerencia</Text>
+               <Text style={styles.generateButtonText}>Generar receta</Text>
             </>
           )}
         </TouchableOpacity>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        {success ? <Text style={styles.successText}>{success}</Text> : null}
+        {error ? (
+          <AppBanner
+            variant="error"
+            title="No se pudo completar la accion"
+            message={error}
+            isDark={isDark}
+            onClose={() => setError(null)}
+          />
+        ) : null}
+        {success ? (
+          <AppBanner
+            variant="success"
+            title="Listo"
+            message={success}
+            isDark={isDark}
+            onClose={() => setSuccess(null)}
+          />
+        ) : null}
 
         {suggestion ? (
           <View style={[styles.recipeCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
@@ -263,7 +300,8 @@ const AIChatScreen: React.FC = () => {
               style={[styles.favoriteButton, isSavingFavorite && styles.buttonDisabled]}
               onPress={addRecipeToFavorites}
               activeOpacity={0.86}
-              disabled={isSavingFavorite}
+              disabled={isSavingFavorite || !isOnline}
+              accessibilityState={{ disabled: isSavingFavorite || !isOnline }}
             >
               {isSavingFavorite ? (
                 <ActivityIndicator size="small" color={COLORS.white} />

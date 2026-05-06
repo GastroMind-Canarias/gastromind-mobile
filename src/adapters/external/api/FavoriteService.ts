@@ -95,13 +95,13 @@ const extractRecipeId = (item: any): string => {
   return pickText(
     '',
     recipeStringId,
-    hasRecipeShape(recipeSource) ? recipeSource?.id : '',
-    recipeSource?.recipeId,
-    recipeSource?.recipe_id,
-    recipeSource?.suggestionRecipeId,
     item?.recipeId,
     item?.recipe_id,
     item?.suggestionRecipeId,
+    recipeSource?.recipeId,
+    recipeSource?.recipe_id,
+    recipeSource?.suggestionRecipeId,
+    hasRecipeShape(recipeSource) ? recipeSource?.id : '',
   );
 };
 
@@ -158,10 +158,10 @@ const mapRecipe = (source: any): Recipe => {
   return {
     id: pickText(
       '',
-      source?.id,
       source?.recipeId,
       source?.recipe_id,
       source?.suggestionRecipeId,
+      source?.id,
       source?.slug,
     ),
     title: pickText(

@@ -9,13 +9,15 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const normalizeToken = (rawToken: string): string => rawToken.replace(/^Bearer\s+/i, '').trim();
+
   const signIn = async (credentials: LoginCredentials) => {
     setLoading(true);
     setError(null);
     try {
       const response = await authService.login(credentials);
       
-      await AsyncStorage.setItem('userToken', response.token);
+      await AsyncStorage.setItem('userToken', normalizeToken(response.token));
       
       contextLogin();
     } catch (err: any) {

@@ -1,9 +1,8 @@
 import * as React from "react";
 import { router } from "expo-router";
 import { ROUTES } from "../navigation/routes";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Easing,
   Platform,
@@ -29,10 +28,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FridgeItem, ItemStatus } from "../../../core/domain/fridgeItem.types";
 import { COLORS } from "../../../shared/theme/colors";
 import { useTheme } from "../../../shared/theme/ThemeProvider";
+import { useNetwork } from "../../../shared/network/NetworkProvider";
 import { fridgeService } from "../../external/api/FridgeService";
 import { profileService } from "../../external/api/ProfileService";
 import { UserProfile } from "../../../core/domain/profile.types";
 import { useAuth } from "../hooks/useAuth";
+import AppStateView from "../components/AppStateView";
+import AppBanner from "../components/AppBanner";
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = "#0D1F17";
@@ -142,6 +144,9 @@ function QuickCard({
         onPressOut={pressOut}
         style={{ flex: 1 }}
         activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityHint={subtitle}
       >
         <View
           style={[styles.quickCardStrip, { backgroundColor: accentColor }]}
@@ -171,10 +176,11 @@ function QuickCard({
 }
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
-const HEADER_TOP_GAP = 12;
+const HEADER_TOP_GAP = 8;
 
 const HomeScreen: React.FC = () => {
   const { isDark } = useTheme();
+  const { isOnline } = useNetwork();
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -185,27 +191,29 @@ const HomeScreen: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
+  const fetchData = useCallback(async () => {
+    setLoadingProfile(true);
+    setLoadError(null);
+    try {
+      const [items, p] = await Promise.all([
+        fridgeService.getAll(),
+        profileService.get(),
+      ]);
+      setFridgeItems(items);
+      setProfile(p);
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No pudimos cargar el inicio.";
+      setLoadError(message);
+      setProfile(null);
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoadingProfile(true);
-      setLoadError(null);
-      try {
-        const [items, p] = await Promise.all([
-          fridgeService.getAll(),
-          profileService.get(),
-        ]);
-        setFridgeItems(items);
-        setProfile(p);
-      } catch (e: any) {
-        const message =
-          e?.response?.data?.message ||
-          e?.message ||
-          "No pudimos cargar el inicio.";
-        setLoadError(message);
-      } finally {
-        setLoadingProfile(false);
-      }
-    };
     fetchData();
 
     Animated.parallel([
@@ -222,19 +230,30 @@ const HomeScreen: React.FC = () => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim, fetchData]);
 
 
-  if (loadingProfile || !profile) {
+  if (loadingProfile) {
     return (
-      <View
-        style={[
-          styles.root,
-          { justifyContent: "center", alignItems: "center" },
-        ]}
-      >
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
+      <AppStateView
+        variant="loading"
+        title="Cargando inicio"
+        message="Estamos preparando tu panel de cocina."
+        isDark={isDark}
+      />
+    );
+  }
+
+  if (!profile) {
+    return (
+      <AppStateView
+        variant="error"
+        title="No se pudo cargar el inicio"
+        message={loadError ?? "Intenta nuevamente en unos segundos."}
+        actionLabel="Reintentar"
+        onAction={fetchData}
+        isDark={isDark}
+      />
     );
   }
 
@@ -267,7 +286,12 @@ const HomeScreen: React.FC = () => {
             <View style={styles.led} />
             <Text style={styles.headerEyebrow}>GastroMind</Text>
           </View>
-          <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={signOut}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar sesion"
+          >
             <LogOut size={13} color={COLORS.error} strokeWidth={2.6} />
             <Text style={styles.logoutText}>Salir</Text>
           </TouchableOpacity>
@@ -331,6 +355,17 @@ const HomeScreen: React.FC = () => {
           ]}
           showsVerticalScrollIndicator={false}
         >
+          {!isOnline ? (
+            <View style={{ marginBottom: 12 }}>
+              <AppBanner
+                variant="warning"
+                title="Modo sin conexion"
+                message="La generacion de recetas IA no esta disponible sin internet."
+                isDark={isDark}
+              />
+            </View>
+          ) : null}
+
           {/* Alerta caducados */}
           {expiredCount > 0 && (
             <TouchableOpacity
@@ -358,14 +393,23 @@ const HomeScreen: React.FC = () => {
           )}
 
           {loadError ? (
-            <View style={[styles.alertBanner, { marginBottom: 14 }]}> 
-              <View style={styles.alertBannerIconWrap}>
-                <ShieldAlert size={18} color={COLORS.error} strokeWidth={2.5} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.alertBannerTitle}>No se pudo actualizar inicio</Text>
-                <Text style={styles.alertBannerSub}>{loadError}</Text>
-              </View>
+            <View style={{ marginBottom: 14, gap: 8 }}>
+              <AppBanner
+                variant="error"
+                title="No se pudo actualizar inicio"
+                message={loadError}
+                isDark={isDark}
+                onClose={() => setLoadError(null)}
+              />
+              <TouchableOpacity
+                style={styles.retryInlineBtn}
+                activeOpacity={0.85}
+                onPress={fetchData}
+                accessibilityRole="button"
+                accessibilityLabel="Reintentar carga de inicio"
+              >
+                <Text style={styles.retryInlineBtnText}>Reintentar</Text>
+              </TouchableOpacity>
             </View>
           ) : null}
 
@@ -408,9 +452,15 @@ const HomeScreen: React.FC = () => {
                 recetas personalizadas solo para ti.
               </Text>
               <TouchableOpacity
-                style={styles.recipeHeroBtn}
+                style={[styles.recipeHeroBtn, !isOnline && { opacity: 0.5 }]}
                 activeOpacity={0.85}
-                onPress={() => router.push(ROUTES.aiChat)}
+                onPress={() => {
+                  if (!isOnline) return;
+                  router.push(ROUTES.aiChat);
+                }}
+                disabled={!isOnline}
+                accessibilityRole="button"
+                accessibilityLabel="Generar receta con inteligencia artificial"
               >
                 <ChefHat size={14} color={COLORS.white} strokeWidth={2.6} />
                 <Text style={[styles.recipeHeroBtnText, { color: COLORS.white }]}>Generar receta</Text>
@@ -502,8 +552,8 @@ const styles = StyleSheet.create({
   // ── Header
   header: {
     backgroundColor: "#0A1B14",
-    paddingHorizontal: 22,
-    paddingBottom: 22,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 36,
     overflow: "hidden",
@@ -544,7 +594,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 10,
   },
   ledRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   led: {
@@ -574,8 +624,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     backgroundColor: MID_GREEN,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.error + "55",
@@ -587,12 +637,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: 10,
-    marginBottom: 22,
+    marginBottom: 10,
   },
   heroTextBlock: { flex: 1, paddingTop: 2 },
   greetingSub: {
     color: ICE,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     opacity: 0.84,
     marginBottom: 2,
@@ -600,15 +650,15 @@ const styles = StyleSheet.create({
   },
   greetingName: {
     color: "#FFFFFF",
-    fontSize: 31,
+    fontSize: 25,
     fontWeight: "900",
     letterSpacing: -0.6,
   },
   heroCaption: {
-    marginTop: 8,
+    marginTop: 6,
     color: ICE,
     fontSize: 11,
-    lineHeight: 16,
+    lineHeight: 15,
     opacity: 0.68,
     fontWeight: "500",
     maxWidth: 230,
@@ -635,12 +685,12 @@ const styles = StyleSheet.create({
   // Header metrics
   headerMetricGrid: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
   },
   headerMetricTile: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 7,
     borderRadius: 13,
     borderWidth: 1.2,
     backgroundColor: COLORS.white + "08",
@@ -654,7 +704,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headerMetricValue: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "900",
   },
   headerMetricLabel: {
@@ -667,7 +717,7 @@ const styles = StyleSheet.create({
   },
 
   // ── Scroll body
-  scroll: { paddingHorizontal: 18, paddingTop: 20 },
+  scroll: { paddingHorizontal: 16, paddingTop: 12 },
 
   // Alert banner
   alertBanner: {
@@ -698,12 +748,24 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     marginTop: 2,
   },
+  retryInlineBtn: {
+    alignSelf: "flex-start",
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  retryInlineBtnText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "800",
+  },
 
   // Section header
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 8,
     gap: 10,
   },
   sectionTitle: {
@@ -717,7 +779,7 @@ const styles = StyleSheet.create({
   sectionLine: { flex: 1, height: 1, backgroundColor: DARK_GREEN + "15" },
 
   // Quick grid
-  quickGrid: { flexDirection: "row", gap: 12, marginBottom: 24 },
+  quickGrid: { flexDirection: "row", gap: 10, marginBottom: 16 },
   quickCard: {
     flex: 1,
     backgroundColor: COLORS.white,
@@ -754,7 +816,7 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_GREEN,
     borderRadius: 24,
     overflow: "hidden",
-    marginBottom: 24,
+    marginBottom: 18,
     ...SHADOW_MD,
   },
   recipeHeroDeco1: {
@@ -775,7 +837,7 @@ const styles = StyleSheet.create({
     bottom: -20,
     left: 20,
   },
-  recipeHeroInner: { padding: 24 },
+  recipeHeroInner: { paddingHorizontal: 18, paddingVertical: 16 },
   recipeHeroBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -787,7 +849,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1.2,
     borderColor: COLORS.primary + "55",
-    marginBottom: 14,
+    marginBottom: 10,
   },
   recipeHeroBadgeText: {
     color: COLORS.primary,
@@ -796,18 +858,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   recipeHeroTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900",
     color: "#FFFFFF",
     letterSpacing: -0.3,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   recipeHeroSub: {
-    fontSize: 13,
+    fontSize: 12,
     color: ICE,
     opacity: 0.65,
-    lineHeight: 19,
-    marginBottom: 20,
+    lineHeight: 17,
+    marginBottom: 12,
   },
   recipeHeroBtn: {
     flexDirection: "row",
@@ -815,18 +877,18 @@ const styles = StyleSheet.create({
     gap: 8,
     alignSelf: "flex-start",
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 13,
-    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
     ...SHADOW_PRIMARY,
   },
-  recipeHeroBtnText: { color: COLORS.white, fontWeight: "800", fontSize: 14 },
+  recipeHeroBtnText: { color: COLORS.white, fontWeight: "800", fontSize: 13 },
 
   // Household card
   householdCard: {
     backgroundColor: COLORS.white,
     borderRadius: 20,
-    padding: 16,
+    padding: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,

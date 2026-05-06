@@ -33,7 +33,7 @@ yarn-error.*
 # local env files
 .env*.local
 .env
-
+.agents/
 # typescript
 *.tsbuildinfo
 
@@ -47,3 +47,4 @@ app-example
 
 AI_CONTEXT.md
 AGENTS.md
+UX_PLANNING.md

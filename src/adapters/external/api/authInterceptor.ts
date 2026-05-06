@@ -10,6 +10,11 @@ type InterceptorIds = {
 let apiClientIds: InterceptorIds | null = null;
 let globalAxiosIds: InterceptorIds | null = null;
 
+const normalizeToken = (rawToken: string | null): string => {
+  if (!rawToken) return '';
+  return rawToken.replace(/^Bearer\s+/i, '').trim();
+};
+
 const isAuthDebugRoute = (url: string): boolean =>
   url.includes('/users/me') ||
   url.includes('/auth/me') ||
@@ -19,13 +24,14 @@ const isAuthDebugRoute = (url: string): boolean =>
 const attachToClient = (client: AxiosInstance, logout: () => void): InterceptorIds => {
   const requestId = client.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
-      const token = await AsyncStorage.getItem('userToken');
+      const storedToken = await AsyncStorage.getItem('userToken');
+      const token = normalizeToken(storedToken);
 
       if (!config.headers) {
         config.headers = {} as InternalAxiosRequestConfig['headers'];
       }
 
-      if (token) {
+      if (token.length > 0) {
         config.headers.Authorization = `Bearer ${token}`;
       }
 

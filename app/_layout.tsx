@@ -88,13 +88,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     }
 
     if (isLoggedIn) {
-      const inFavoritesTab = segs[0] === '(app)' && segs[1] === '(tabs)' && segs[2] === 'favorites';
-
-      if (!isOnline && !inFavoritesTab) {
-        router.replace('/(app)/(tabs)/favorites');
-        return;
-      }
-
       if (inAuth) {
         router.replace(ROUTES.appTabs);
       } else if (atIndex) {

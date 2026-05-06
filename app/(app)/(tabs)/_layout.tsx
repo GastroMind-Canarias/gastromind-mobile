@@ -1,9 +1,9 @@
 import { useTheme, useThemeColors } from '@/src/shared/theme/ThemeProvider';
 import { useNetwork } from '@/src/shared/network/NetworkProvider';
-import { Tabs, usePathname, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Heart, Home, Refrigerator, ShoppingCart, UserCircle2 } from 'lucide-react-native';
 import React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function TabIcon({ focused, children, activeColor }: { focused: boolean; children: React.ReactNode; activeColor: string }) {
@@ -32,18 +32,28 @@ export default function TabsLayout() {
   const { isOnline } = useNetwork();
   const { isDark } = useTheme();
   const colors = useThemeColors();
-  const pathname = usePathname();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabPaddingTop = 8;
   const tabPaddingBottom = 8 + insets.bottom;
   const tabBarHeight = tabPaddingTop + TAB_BAR_CONTENT + tabPaddingBottom;
 
-  React.useEffect(() => {
-    if (isOnline) return;
-    if (pathname === '/(app)/(tabs)/favorites') return;
-    router.replace('/(app)/(tabs)/favorites');
-  }, [isOnline, pathname, router]);
+  const makeOfflineTabButton = (disabled: boolean) =>
+    function OfflineTabButton(props: any) {
+      const { onPress, accessibilityState, ...rest } = props;
+      return (
+        <TouchableOpacity
+          {...rest}
+          activeOpacity={disabled ? 1 : 0.85}
+          onPress={disabled ? undefined : onPress}
+          style={[props.style, disabled && { opacity: 0.45 }]}
+          accessibilityState={{
+            ...(accessibilityState || {}),
+            disabled,
+          }}
+          accessibilityHint={disabled ? 'Disponible solo con conexion a internet' : props.accessibilityHint}
+        />
+      );
+    };
 
   return (
     <Tabs
@@ -84,7 +94,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Inicio',
-          href: isOnline ? '/(app)/(tabs)' : null,
+          tabBarButton: makeOfflineTabButton(!isOnline),
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon focused={focused} activeColor={colors.primary}>
               <Home size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
@@ -96,7 +106,7 @@ export default function TabsLayout() {
         name="fridge"
         options={{
           title: 'Nevera',
-          href: isOnline ? '/(app)/(tabs)/fridge' : null,
+          tabBarButton: makeOfflineTabButton(!isOnline),
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon focused={focused} activeColor={colors.primary}>
               <Refrigerator size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
@@ -119,7 +129,7 @@ export default function TabsLayout() {
         name="shopping"
         options={{
           title: 'Compras',
-          href: isOnline ? '/(app)/(tabs)/shopping' : null,
+          tabBarButton: makeOfflineTabButton(!isOnline),
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon focused={focused} activeColor={colors.primary}>
               <ShoppingCart size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
@@ -131,7 +141,7 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Perfil',
-          href: isOnline ? '/(app)/(tabs)/profile' : null,
+          tabBarButton: makeOfflineTabButton(!isOnline),
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon focused={focused} activeColor={colors.primary}>
               <UserCircle2 size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />

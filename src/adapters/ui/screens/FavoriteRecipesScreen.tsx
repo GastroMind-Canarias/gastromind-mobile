@@ -3,11 +3,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { pushRecipeDetail } from '../navigation/routes';
 import { favoriteService, UserFavorite } from '../../external/api/FavoriteService';
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Easing,
-  Image,
+  FlatList,
+  GestureResponderEvent,
   Platform,
   RefreshControl,
   ScrollView,
@@ -23,6 +23,9 @@ import { COLORS } from '../../../shared/theme/colors';
 import { useNetwork } from '../../../shared/network/NetworkProvider';
 import { useTheme } from '../../../shared/theme/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AppStateView from '../components/AppStateView';
+import AppBanner from '../components/AppBanner';
+import AppEmptyState from '../components/AppEmptyState';
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = '#0D1F17';
@@ -35,7 +38,6 @@ const RecipeCard: React.FC<{
   onRemove: () => void;
 }> = ({ favorite, isDark, onPress, onRemove }) => {
   const { recipe } = favorite;
-  const hasImage = typeof recipe.image_url === 'string' && recipe.image_url.trim().length > 0;
   const cardDescription =
     recipe.description && recipe.description !== 'Sin descripcion.'
       ? recipe.description
@@ -53,30 +55,33 @@ const RecipeCard: React.FC<{
         onPressIn={pressIn}
         onPressOut={pressOut}
         activeOpacity={0.9}
+        accessibilityRole="button"
+        accessibilityLabel={`Abrir receta ${recipe.title}`}
+        accessibilityHint="Abre el detalle de esta receta"
       >
-        {/* Imagen */}
-        {hasImage ? (
-          <Image style={styles.recipeImage} source={{ uri: recipe.image_url }} />
-        ) : (
-          <View style={[styles.recipeImage, styles.recipeImageFallback, isDark && styles.recipeImageFallbackDark]}>
-            <ChefHat size={24} color={isDark ? COLORS.white : COLORS.primary} strokeWidth={2.4} />
-            <Text style={[styles.recipeImageFallbackText, isDark && { color: COLORS.white, opacity: 0.86 }]}>Sin imagen</Text>
-          </View>
-        )}
-
-        <View style={styles.bookmarkBadge}>
-          <Heart size={16} color={COLORS.error} fill={COLORS.error} strokeWidth={2.3} />
-        </View>
-
-        <TouchableOpacity style={styles.removeBadge} onPress={onRemove} activeOpacity={0.85}>
-          <Trash2 size={14} color={COLORS.white} strokeWidth={2.6} />
-        </TouchableOpacity>
-
         {/* Info */}
         <View style={styles.recipeInfo}>
-          <View style={styles.recipeHeader}>
-            <Text style={[styles.recipeTitle, isDark && { color: COLORS.white }]} numberOfLines={1}>{recipe.title}</Text>
+          <View style={styles.recipeTopRow}>
+            <View style={styles.recipeTitleWrap}>
+              <View style={styles.recipeTitleAccent} />
+              <Text style={[styles.recipeTitle, isDark && { color: COLORS.white }]} numberOfLines={2}>{recipe.title}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.removeBadgeInline}
+              onPress={(event: GestureResponderEvent) => {
+                event.stopPropagation();
+                onRemove();
+              }}
+              activeOpacity={0.85}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Quitar ${recipe.title} de favoritos`}
+              accessibilityHint="Elimina esta receta de tu lista"
+            >
+              <Trash2 size={13} color={COLORS.white} strokeWidth={2.6} />
+            </TouchableOpacity>
           </View>
+
           <Text style={[styles.recipeDesc, isDark && { color: COLORS.white, opacity: 0.78 }]} numberOfLines={2}>{cardDescription}</Text>
 
           <View style={styles.recipeStats}>
@@ -110,6 +115,8 @@ const FavoriteRecipesScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedAppliance, setSelectedAppliance] = useState<string>('TODOS');
+  const [selectedTimeFilter, setSelectedTimeFilter] = useState<string>('TODOS');
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
@@ -121,6 +128,48 @@ const FavoriteRecipesScreen: React.FC = () => {
       ),
     [favorites]
   );
+
+  const applianceOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        favorites
+          .map((item) => item.recipe.appliance_needed)
+          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+    return ['TODOS', ...values];
+  }, [favorites]);
+
+  const timeOptions = [
+    { label: 'Todos', value: 'TODOS' },
+    { label: 'Hasta 15m', value: 'LTE_15' },
+    { label: 'Hasta 30m', value: 'LTE_30' },
+    { label: 'Hasta 45m', value: 'LTE_45' },
+    { label: 'Mas de 45m', value: 'GT_45' },
+  ] as const;
+
+  const filteredFavorites = useMemo(() => {
+    return sortedFavorites.filter((item) => {
+      const applianceMatches = selectedAppliance === 'TODOS' || item.recipe.appliance_needed === selectedAppliance;
+      const prepTime = Number.isFinite(item.recipe.prep_time) ? item.recipe.prep_time : 0;
+
+      const timeMatches =
+        selectedTimeFilter === 'TODOS' ||
+        (selectedTimeFilter === 'LTE_15' && prepTime <= 15) ||
+        (selectedTimeFilter === 'LTE_30' && prepTime <= 30) ||
+        (selectedTimeFilter === 'LTE_45' && prepTime <= 45) ||
+        (selectedTimeFilter === 'GT_45' && prepTime > 45);
+
+      return applianceMatches && timeMatches;
+    });
+  }, [selectedAppliance, selectedTimeFilter, sortedFavorites]);
+
+  const hasActiveFilters = selectedAppliance !== 'TODOS' || selectedTimeFilter !== 'TODOS';
+
+  const resetFilters = () => {
+    setSelectedAppliance('TODOS');
+    setSelectedTimeFilter('TODOS');
+  };
 
   const fetchFavorites = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
@@ -176,15 +225,19 @@ const FavoriteRecipesScreen: React.FC = () => {
           text: 'Quitar',
           style: 'destructive',
           onPress: async () => {
+            const previousFavorites = favorites;
+            setFavorites((prev) => prev.filter((item) => item.id !== favoriteId));
             try {
               await favoriteService.deleteMine(favoriteId);
-              setFavorites((prev) => prev.filter((item) => item.id !== favoriteId));
             } catch (e: any) {
+              setFavorites(previousFavorites);
               const message =
                 e?.response?.data?.message ||
                 e?.message ||
                 'No se pudo quitar la receta de favoritos.';
               Alert.alert('Ups', message);
+            } finally {
+              fetchFavorites(false);
             }
           },
         },
@@ -194,11 +247,25 @@ const FavoriteRecipesScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={[styles.loadingRoot, isDark && { backgroundColor: '#0C100D' }]}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0C100D' : DARK_GREEN} translucent={false} />
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={[styles.loadingText, isDark && { color: COLORS.white, opacity: 0.8 }]}>Cargando tus recetas favoritas...</Text>
-      </View>
+      <AppStateView
+        variant="loading"
+        title="Cargando favoritos"
+        message="Estamos preparando tus recetas guardadas."
+        isDark={isDark}
+      />
+    );
+  }
+
+  if (error && favorites.length === 0) {
+    return (
+      <AppStateView
+        variant="error"
+        title="No se pudieron cargar tus favoritos"
+        message={error}
+        actionLabel="Reintentar"
+        onAction={() => fetchFavorites(true)}
+        isDark={isDark}
+      />
     );
   }
 
@@ -212,49 +279,162 @@ const FavoriteRecipesScreen: React.FC = () => {
           { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
         ]}
       >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
+        <FlatList
+          data={filteredFavorites}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <RecipeCard
+              favorite={item}
+              isDark={isDark}
+              onPress={() => pushRecipeDetail(item.recipe as Recipe)}
+              onRemove={() => handleDeleteFavorite(item.id, item.recipe.title)}
+            />
+          )}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          ListHeaderComponent={(
+            <View style={styles.scroll}>
+              <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
+                <View style={[styles.heroAccent, isDark && styles.heroAccentDark]} />
+                <View style={[styles.sectionIconWrap, isDark && styles.sectionIconWrapDark]}>
+                  <Heart size={15} color={isDark ? COLORS.white : COLORS.error} fill={isDark ? COLORS.white : COLORS.error} strokeWidth={2.2} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sectionTitle, isDark && { color: COLORS.white }]}>Recetas favoritas</Text>
+                  <Text style={[styles.sectionSubtitle, isDark && { color: COLORS.white, opacity: 0.68 }]}>{filteredFavorites.length} guardadas para cocinar rapido</Text>
+                </View>
+                <View style={[styles.countBadge, isDark && styles.countBadgeDark]}>
+                  <Text style={[styles.countBadgeText, isDark && { color: COLORS.white }]}>{filteredFavorites.length}</Text>
+                </View>
+              </View>
+
+              <View style={[styles.filtersBlock, isDark && styles.filtersBlockDark]}>
+                <View style={styles.filtersTopRow}>
+                  <Text style={[styles.filtersTitle, isDark && { color: COLORS.white, opacity: 0.85 }]}>Filtros</Text>
+                  {hasActiveFilters ? (
+                    <TouchableOpacity
+                      style={styles.clearFiltersBtn}
+                      onPress={resetFilters}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel="Limpiar filtros"
+                      accessibilityHint="Restablece utensilio y tiempo"
+                    >
+                      <Text style={styles.clearFiltersText}>Limpiar</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <Text style={[styles.filterGroupLabel, isDark && { color: COLORS.white, opacity: 0.62 }]}>Utensilio</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
+                  {applianceOptions.map((option) => {
+                    const isActive = selectedAppliance === option;
+                    return (
+                      <TouchableOpacity
+                        key={option}
+                        onPress={() => setSelectedAppliance(option)}
+                        activeOpacity={0.85}
+                        style={[
+                          styles.filterChip,
+                          isDark && styles.filterChipDark,
+                          isActive && styles.filterChipActive,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={option === 'TODOS' ? 'Filtro utensilio todos' : `Filtro utensilio ${option}`}
+                      >
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            isDark && { color: COLORS.white, opacity: 0.8 },
+                            isActive && styles.filterChipTextActive,
+                          ]}
+                        >
+                          {option === 'TODOS' ? 'Utensilio: Todos' : option}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                <Text style={[styles.filterGroupLabel, isDark && { color: COLORS.white, opacity: 0.62 }]}>Tiempo</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
+                  {timeOptions.map((option) => {
+                    const isActive = selectedTimeFilter === option.value;
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
+                        onPress={() => setSelectedTimeFilter(option.value)}
+                        activeOpacity={0.85}
+                        style={[
+                          styles.filterChip,
+                          isDark && styles.filterChipDark,
+                          isActive && styles.filterChipActive,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Filtro tiempo ${option.label}`}
+                      >
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            isDark && { color: COLORS.white, opacity: 0.8 },
+                            isActive && styles.filterChipTextActive,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {!isOnline ? (
+                <View style={styles.bannerWrap}>
+                  <AppBanner
+                    variant="warning"
+                    title="Modo sin conexion"
+                    message="Mostrando favoritos almacenados localmente."
+                    isDark={isDark}
+                  />
+                </View>
+              ) : null}
+
+              {error ? (
+                <View style={styles.bannerWrap}>
+                  <AppBanner
+                    variant="error"
+                    title="No se pudo actualizar favoritos"
+                    message={error}
+                    isDark={isDark}
+                    onClose={() => setError(null)}
+                  />
+                  <TouchableOpacity
+                    style={styles.retryBtn}
+                    onPress={() => fetchFavorites(false)}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reintentar carga de favoritos"
+                  >
+                    <Text style={styles.retryBtnText}>Reintentar</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+          )}
+          ListEmptyComponent={(
+            <AppEmptyState
+              title="No hay recetas para esos filtros"
+              message="Proba otro utensilio o cambia el rango de tiempo."
+              isDark={isDark}
+              actionLabel={hasActiveFilters ? 'Limpiar filtros' : undefined}
+              onAction={hasActiveFilters ? resetFilters : undefined}
+            />
+          )}
+          contentContainerStyle={{ paddingBottom: 6 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
           }
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, isDark && { color: COLORS.white, opacity: 0.8 }]}>Platos Guardados</Text>
-            <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + '2A' }]} />
-          </View>
-
-          {!isOnline ? (
-            <Text style={[styles.errorText, { color: '#D18E2B' }]}>Modo sin conexión: mostrando favoritos almacenados.</Text>
-          ) : null}
-
-          {error && <Text style={[styles.errorText, isDark && { color: '#FF9A9A' }]}>{error}</Text>}
-
-          <View style={styles.listContainer}>
-            {sortedFavorites.length === 0 ? (
-              <View style={[styles.emptyCard, isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '55' }]}>
-                <View style={styles.emptyIconWrap}>
-                  <Heart size={24} color={COLORS.error} strokeWidth={2.4} />
-                </View>
-                <Text style={[styles.emptyTitle, isDark && { color: COLORS.white }]}>Todavia no tenes favoritos</Text>
-                <Text style={[styles.emptySubtitle, isDark && { color: COLORS.white, opacity: 0.75 }]}>
-                  Genera recetas con IA o guarda una desde sugerencias para verla aca.
-                </Text>
-              </View>
-            ) : (
-              sortedFavorites.map((fav) => (
-                <RecipeCard
-                  key={fav.id}
-                  favorite={fav}
-                  isDark={isDark}
-                  onPress={() => pushRecipeDetail(fav.recipe as Recipe)}
-                  onRemove={() => handleDeleteFavorite(fav.id, fav.recipe.title)}
-                />
-              ))
-            )}
-          </View>
-
-        </ScrollView>
+        />
       </Animated.View>
     </View>
   );
@@ -265,11 +445,6 @@ const SHADOW_SM = Platform.select({
   ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8 },
   android: { elevation: 3 },
 });
-const SHADOW_MD = Platform.select({
-  ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16 },
-  android: { elevation: 10 },
-});
-
 const styles = StyleSheet.create({
   loadingRoot: {
     flex: 1,
@@ -287,15 +462,161 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#E9F5EE' },
 
   // ── Scroll body
-  scroll: { paddingHorizontal: 18, paddingTop: 10 },
+  scroll: { paddingHorizontal: 14, paddingTop: 6 },
+
+  heroCard: {
+    marginBottom: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D8E9DE',
+    backgroundColor: '#F7FCF9',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    overflow: 'hidden',
+    ...SHADOW_SM,
+  },
+  heroCardDark: {
+    backgroundColor: '#102A1D',
+    borderColor: COLORS.secondary + '55',
+  },
+  heroAccent: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    right: -35,
+    top: -70,
+    backgroundColor: '#DFF4E8',
+  },
+  heroAccentDark: {
+    backgroundColor: COLORS.white + '10',
+  },
 
   // Section header
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 },
-  sectionTitle: { fontSize: 12, fontWeight: '800', color: DARK_GREEN, opacity: 0.5, letterSpacing: 0.9, textTransform: 'uppercase' },
-  sectionLine: { flex: 1, height: 1, backgroundColor: DARK_GREEN + '15' },
+  sectionIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFEDED',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F7D4D4',
+  },
+  sectionIconWrapDark: {
+    backgroundColor: COLORS.white + '15',
+    borderColor: COLORS.white + '24',
+  },
+  sectionTitle: { fontSize: 14, fontWeight: '900', color: DARK_GREEN, letterSpacing: 0.1 },
+  sectionSubtitle: { fontSize: 11, fontWeight: '600', color: DARK_GREEN, opacity: 0.58 },
+  countBadge: {
+    minWidth: 30,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 8,
+    backgroundColor: COLORS.primary + '18',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '44',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countBadgeDark: {
+    backgroundColor: COLORS.white + '15',
+    borderColor: COLORS.white + '30',
+  },
+  countBadgeText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.primary,
+  },
 
   listContainer: {
-    gap: 16,
+    gap: 10,
+  },
+  filtersBlock: {
+    marginBottom: 10,
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DAEADF',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    ...SHADOW_SM,
+  },
+  filtersTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  filtersTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: DARK_GREEN,
+    opacity: 0.78,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  filterGroupLabel: {
+    marginTop: -2,
+    marginBottom: -2,
+    fontSize: 11,
+    fontWeight: '700',
+    color: DARK_GREEN,
+    opacity: 0.54,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  clearFiltersBtn: {
+    minHeight: 36,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#1E7A4E',
+    justifyContent: 'center',
+  },
+  clearFiltersText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  filtersBlockDark: {
+    backgroundColor: '#11351A',
+    borderColor: COLORS.secondary + '50',
+  },
+  filtersRow: {
+    gap: 8,
+    paddingRight: 12,
+  },
+  filterChip: {
+    borderRadius: 13,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    backgroundColor: '#F4FAF6',
+    borderWidth: 1,
+    borderColor: '#D6E8DB',
+  },
+  filterChipDark: {
+    backgroundColor: '#11351A',
+    borderColor: COLORS.secondary + '55',
+  },
+  filterChipActive: {
+    backgroundColor: '#157347',
+    borderColor: '#157347',
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: DARK_GREEN,
+    opacity: 0.82,
+  },
+  filterChipTextActive: {
+    color: COLORS.white,
+    opacity: 1,
   },
   errorText: {
     color: COLORS.error,
@@ -303,6 +624,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
     textAlign: 'center',
+  },
+  bannerWrap: {
+    marginBottom: 12,
+    gap: 8,
+  },
+  retryBtn: {
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  retryBtnText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '800',
   },
   emptyCard: {
     backgroundColor: COLORS.white,
@@ -342,90 +679,85 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   recipeCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     overflow: 'hidden',
-    ...SHADOW_SM,
-  },
-  recipeImage: {
-    width: '100%',
-    height: 160,
-    backgroundColor: '#D1E6DA',
-  },
-  recipeImageFallback: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#EAF6EE',
-    borderBottomWidth: 1,
-    borderBottomColor: '#DDECE1',
-  },
-  recipeImageFallbackDark: {
-    backgroundColor: '#1A2E1F',
-    borderBottomColor: COLORS.secondary + '44',
-  },
-  recipeImageFallbackText: {
-    color: DARK_GREEN,
-    fontSize: 12,
-    fontWeight: '700',
-    opacity: 0.7,
-  },
-  bookmarkBadge: {
-    position: 'absolute',
-    top: 16, right: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    width: 36, height: 36,
-    borderRadius: 18,
-    justifyContent: 'center', alignItems: 'center',
-    ...SHADOW_SM,
-  },
-  removeBadge: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    backgroundColor: DARK_GREEN + 'D9',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.white + '50',
+    borderColor: '#D7E9DD',
+    ...SHADOW_SM,
+  },
+  bookmarkBadgeInline: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFF2F2',
+    borderWidth: 1,
+    borderColor: '#F6D8D8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeBadgeInline: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E05A5A',
+    borderWidth: 1,
+    borderColor: '#F9C3C3',
   },
   recipeInfo: {
-    padding: 18,
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
   },
-  recipeHeader: {
+  recipeTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 8,
+  },
+  recipeTitleWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  recipeTitleAccent: {
+    width: 4,
+    height: 22,
+    borderRadius: 2,
+    backgroundColor: COLORS.primary,
+    marginTop: 2,
   },
   recipeTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: DARK_GREEN,
-    flex: 1,
-    letterSpacing: -0.2,
+    flexShrink: 1,
+    lineHeight: 21,
+    letterSpacing: -0.1,
   },
   recipeDesc: {
-    fontSize: 13,
+    fontSize: 12,
     color: DARK_GREEN,
-    opacity: 0.6,
-    marginBottom: 16,
-    lineHeight: 18,
+    opacity: 0.62,
+    marginBottom: 14,
+    lineHeight: 17,
   },
   recipeStats: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
+    flexWrap: 'wrap',
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F9F5',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    backgroundColor: '#F4FAF6',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2EFE7',
     gap: 4,

@@ -47,6 +47,27 @@ const resolveItemsList = (payload: any): any[] => {
   return [];
 };
 
+const resolveProductName = (product: any): string => {
+  if (typeof product === 'string') return product;
+  if (typeof product?.name === 'string') return product.name;
+  return '';
+};
+
+const asErrorStatus = (error: any): number | null => {
+  const status = error?.response?.status;
+  return typeof status === 'number' ? status : null;
+};
+
+const canRetryCreatePayload = (error: any): boolean => {
+  const status = asErrorStatus(error);
+  return status === 400 || status === 422;
+};
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isUuid = (value: string): boolean => UUID_REGEX.test(value.trim());
+
 const getDefaultFridgeId = async () => {
   if (defaultFridgeId) return defaultFridgeId;
   try {
@@ -81,7 +102,7 @@ export const fridgeService = {
         product: item.productName || item.product?.name || item.product,
         fridgeId: item.fridgeId
       }));
-    } catch (e) {
+    } catch {
       try {
         const fridgeId = await getDefaultFridgeId();
         if (!fridgeId) return [];
@@ -111,23 +132,23 @@ export const fridgeService = {
 
   create: async (item: Omit<FridgeItem, 'id'>): Promise<FridgeItem | null> => {
     try {
-      let productId = '';
-      
-      const prodsRes = await apiClient.get('/products');
-      const existingProduct = prodsRes.data.find((p: any) => p.name.toLowerCase() === item.product.toLowerCase());
-      
-      if (existingProduct) {
-        productId = existingProduct.id;
-      } else {
-        const newProd = await apiClient.post('/products', {
-          name: item.product,
-          is_essential: false
-        });
-        productId = newProd.data.id;
-      }
+      const normalizedProductName = item.product.trim();
+      const payloadCamel = {
+        productName: normalizedProductName,
+        quantity: item.quantity,
+        expirationDate: item.expirationDate,
+        status: item.status,
+      };
 
-      const payload = {
-        productId: productId,
+      const payloadSnake = {
+        product_name: normalizedProductName,
+        quantity: item.quantity,
+        expiration_date: item.expirationDate,
+        status: item.status,
+      };
+
+      const payloadNameOnly = {
+        product: normalizedProductName,
         quantity: item.quantity,
         expirationDate: item.expirationDate,
         status: item.status,
@@ -135,25 +156,40 @@ export const fridgeService = {
 
       let response;
       try {
-        response = await apiClient.post('/fridge-items/me', payload);
-      } catch {
-        const fridgeId = await getDefaultFridgeId();
-        response = await apiClient.post('/fridge-items', {
-          ...payload,
-          fridgeId: fridgeId,
-        });
+        response = await apiClient.post('/fridge-items/me', payloadCamel);
+      } catch (createItemError: any) {
+        if (!canRetryCreatePayload(createItemError)) {
+          throw createItemError;
+        }
+
+        try {
+          response = await apiClient.post('/fridge-items/me', payloadSnake);
+        } catch (snakeError: any) {
+          if (!canRetryCreatePayload(snakeError)) {
+            throw snakeError;
+          }
+          response = await apiClient.post('/fridge-items/me', payloadNameOnly);
+        }
       }
 
+      const responseData = response.data || {};
+
       return {
-        id: response.data.id,
-        quantity: response.data.quantity,
-        expirationDate: response.data.expirationDate,
-        status: response.data.status as ItemStatus,
-        product: response.data.productName,
-        fridgeId: response.data.fridgeId
+        id: responseData.id,
+        quantity: responseData.quantity,
+        expirationDate: responseData.expirationDate || responseData.expiration_date,
+        status: (responseData.status || item.status) as ItemStatus,
+        product: responseData.productName || responseData.product_name || responseData.product?.name || item.product,
+        fridgeId: responseData.fridgeId || responseData.fridge_id || item.fridgeId,
       };
-    } catch (e) {
-      console.error('Error creating fridge item:', e);
+    } catch (e: any) {
+      console.error('Error creating fridge item:', {
+        status: e?.response?.status,
+        endpoint: e?.config?.url,
+        method: e?.config?.method,
+        data: e?.response?.data,
+        message: e?.message,
+      });
       return null;
     }
   },
@@ -176,31 +212,8 @@ export const fridgeService = {
       const itemRes = await apiClient.get(`/fridge-items/${id}`);
       const current = itemRes.data;
 
-      let productId = '';
-      if (updatedData.product && updatedData.product !== current.productName) {
-         const prodsRes = await apiClient.get('/products');
-         const existingProduct = prodsRes.data.find((p: any) => p.name.toLowerCase() === updatedData.product?.toLowerCase());
-         if (existingProduct) {
-            productId = existingProduct.id;
-         } else {
-            const newProd = await apiClient.post('/products', {
-              name: updatedData.product,
-              is_essential: false
-            });
-            productId = newProd.data.id;
-         }
-      }
-
-      if (!productId) {
-         const prodsRes = await apiClient.get('/products');
-         const existingProduct = prodsRes.data.find((p: any) => p.name.toLowerCase() === current.productName.toLowerCase());
-         if (existingProduct) {
-            productId = existingProduct.id;
-         }
-      }
-
       await apiClient.put(`/fridge-items/${id}`, {
-        productId: productId,
+        productName: updatedData.product !== undefined ? updatedData.product : current.productName,
         fridgeId: updatedData.fridgeId || current.fridgeId,
         quantity: updatedData.quantity !== undefined ? updatedData.quantity : current.quantity,
         expirationDate: updatedData.expirationDate !== undefined ? updatedData.expirationDate : current.expirationDate,
