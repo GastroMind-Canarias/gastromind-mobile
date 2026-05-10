@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -78,6 +81,15 @@ export default function ShoppingHabitsScreen() {
     () => summary.habitualItems.filter((item) => !item.hasEnough).length,
     [summary.habitualItems]
   );
+  const completeCount = Math.max(0, summary.habitualItems.length - missingCount);
+  const totalHabitualCount = summary.habitualItems.length;
+  const coveragePct = totalHabitualCount > 0 ? Math.round((completeCount / totalHabitualCount) * 100) : 0;
+  const [chartTrackWidth, setChartTrackWidth] = useState(0);
+  const coverageAnim = React.useRef(new Animated.Value(0)).current;
+  const fillWidth = coverageAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, chartTrackWidth],
+  });
 
   const load = useCallback(async () => {
     try {
@@ -101,6 +113,21 @@ export default function ShoppingHabitsScreen() {
     };
     run();
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load().catch(() => {});
+    }, [load])
+  );
+
+  useEffect(() => {
+    Animated.timing(coverageAnim, {
+      toValue: coveragePct,
+      duration: 380,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [coverageAnim, coveragePct]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -161,6 +188,35 @@ export default function ShoppingHabitsScreen() {
           <View style={styles.sectionHead}>
             <Text style={[styles.sectionTitle, isDark && { color: COLORS.white }]}>Checklist habitual</Text>
             <Text style={styles.sectionPill}>{missingCount} pendientes</Text>
+          </View>
+
+          <View style={[styles.chartCard, isDark && { backgroundColor: colors.surface, borderColor: colors.secondary + '55' }]}>
+            <View style={styles.chartHead}>
+              <Text style={[styles.chartTitle, isDark && { color: COLORS.white }]}>Cobertura de compra habitual</Text>
+              <Text style={styles.chartPct}>{coveragePct}%</Text>
+            </View>
+            <Text style={[styles.chartSub, isDark && { color: COLORS.white, opacity: 0.72 }]}>Motivo: ver de un vistazo si tu compra tipo está cubierta con lo que ya hay en nevera.</Text>
+
+            <View
+              style={[styles.chartTrack, isDark && { backgroundColor: COLORS.white + '18' }]}
+              onLayout={(event) => {
+                const width = Math.max(0, Math.round(event.nativeEvent.layout.width));
+                if (width !== chartTrackWidth) setChartTrackWidth(width);
+              }}
+            >
+              <Animated.View style={[styles.chartFill, { width: fillWidth }]} />
+            </View>
+
+            <View style={styles.chartLegendRow}>
+              <View style={styles.chartLegendItem}>
+                <View style={[styles.chartLegendDot, { backgroundColor: COLORS.primary }]} />
+                <Text style={[styles.chartLegendText, isDark && { color: COLORS.white, opacity: 0.86 }]}>Cubiertos: {completeCount}</Text>
+              </View>
+              <View style={styles.chartLegendItem}>
+                <View style={[styles.chartLegendDot, { backgroundColor: COLORS.error }]} />
+                <Text style={[styles.chartLegendText, isDark && { color: COLORS.white, opacity: 0.86 }]}>Pendientes: {missingCount}</Text>
+              </View>
+            </View>
           </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -342,6 +398,68 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 4,
+  },
+  chartCard: {
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#DDECE2',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    gap: 8,
+  },
+  chartHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  chartTitle: {
+    color: DARK,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  chartPct: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  chartSub: {
+    color: COLORS.text,
+    opacity: 0.66,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  chartTrack: {
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: '#E8F4EC',
+    overflow: 'hidden',
+  },
+  chartFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+  },
+  chartLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  chartLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  chartLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  chartLegendText: {
+    color: COLORS.text,
+    opacity: 0.75,
+    fontSize: 11,
+    fontWeight: '700',
   },
   itemCard: {
     borderRadius: 15,

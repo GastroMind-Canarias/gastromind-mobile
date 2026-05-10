@@ -63,6 +63,11 @@ const canRetryCreatePayload = (error: any): boolean => {
   return status === 400 || status === 422;
 };
 
+const canRetryUpdatePayload = (error: any): boolean => {
+  const status = asErrorStatus(error);
+  return status === 400 || status === 404 || status === 405 || status === 422;
+};
+
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -196,9 +201,18 @@ export const fridgeService = {
 
   delete: async (id: string): Promise<void> => {
     try {
-      await apiClient.delete(`/fridge-items/${id}`);
+      try {
+        await apiClient.post('/fridge-items/me/delete', { id });
+      } catch (deleteError: any) {
+        const status = asErrorStatus(deleteError);
+        if (status !== 404 && status !== 405) {
+          throw deleteError;
+        }
+        await apiClient.delete(`/fridge-items/${id}`);
+      }
     } catch (e) {
       console.error('Error deleting fridge item:', e);
+      throw e;
     }
   },
 
@@ -212,16 +226,125 @@ export const fridgeService = {
       const itemRes = await apiClient.get(`/fridge-items/${id}`);
       const current = itemRes.data;
 
-      await apiClient.put(`/fridge-items/${id}`, {
-        productName: updatedData.product !== undefined ? updatedData.product : current.productName,
-        fridgeId: updatedData.fridgeId || current.fridgeId,
-        quantity: updatedData.quantity !== undefined ? updatedData.quantity : current.quantity,
-        expirationDate: updatedData.expirationDate !== undefined ? updatedData.expirationDate : current.expirationDate,
-        status: updatedData.status !== undefined ? updatedData.status : current.status
-      });
+      const nextProduct =
+        updatedData.product !== undefined
+          ? updatedData.product
+          : current.productName || current.product_name || current.product?.name || current.product;
+      const nextFridgeId = updatedData.fridgeId || current.fridgeId || current.fridge_id;
+      const nextQuantity = updatedData.quantity !== undefined ? updatedData.quantity : current.quantity;
+      const nextExpirationDate =
+        updatedData.expirationDate !== undefined
+          ? updatedData.expirationDate
+          : current.expirationDate || current.expiration_date;
+      const nextStatus = updatedData.status !== undefined ? updatedData.status : current.status;
+
+      const payloadCamel = {
+        productName: nextProduct,
+        fridgeId: nextFridgeId,
+        quantity: nextQuantity,
+        expirationDate: nextExpirationDate,
+        status: nextStatus,
+      };
+
+      const payloadSnake = {
+        product_name: nextProduct,
+        fridge_id: nextFridgeId,
+        quantity: nextQuantity,
+        expiration_date: nextExpirationDate,
+        status: nextStatus,
+      };
+
+      const payloadNameOnly = {
+        product: nextProduct,
+        fridgeId: nextFridgeId,
+        quantity: nextQuantity,
+        expirationDate: nextExpirationDate,
+        status: nextStatus,
+      };
+
+      const updatePayloadCamel = {
+        id,
+        ...payloadCamel,
+      };
+
+      const updatePayloadSnake = {
+        id,
+        ...payloadSnake,
+      };
+
+      const updatePayloadNameOnly = {
+        id,
+        ...payloadNameOnly,
+      };
+
+      try {
+        await apiClient.post('/fridge-items/me/update', updatePayloadCamel);
+      } catch (postUpdateError: any) {
+        if (!canRetryUpdatePayload(postUpdateError)) {
+          throw postUpdateError;
+        }
+
+        try {
+          await apiClient.post('/fridge-items/me/update', updatePayloadSnake);
+        } catch (postUpdateSnakeError: any) {
+          if (!canRetryUpdatePayload(postUpdateSnakeError)) {
+            throw postUpdateSnakeError;
+          }
+
+          try {
+            await apiClient.post('/fridge-items/me/update', updatePayloadNameOnly);
+          } catch (postUpdateNameOnlyError: any) {
+            if (!canRetryUpdatePayload(postUpdateNameOnlyError)) {
+              throw postUpdateNameOnlyError;
+            }
+
+            try {
+              await apiClient.put(`/fridge-items/${id}`, payloadCamel);
+            } catch (putError: any) {
+        if (!canRetryUpdatePayload(putError)) {
+          throw putError;
+        }
+
+        try {
+          await apiClient.patch(`/fridge-items/${id}`, payloadCamel);
+        } catch (patchCamelError: any) {
+          if (!canRetryUpdatePayload(patchCamelError)) {
+            throw patchCamelError;
+          }
+
+          try {
+            await apiClient.put(`/fridge-items/${id}`, payloadSnake);
+          } catch (putSnakeError: any) {
+            if (!canRetryUpdatePayload(putSnakeError)) {
+              throw putSnakeError;
+            }
+
+            try {
+              await apiClient.patch(`/fridge-items/${id}`, payloadSnake);
+            } catch (patchSnakeError: any) {
+              if (!canRetryUpdatePayload(patchSnakeError)) {
+                throw patchSnakeError;
+              }
+
+              try {
+                await apiClient.put(`/fridge-items/${id}`, payloadNameOnly);
+              } catch (putNameOnlyError: any) {
+                if (!canRetryUpdatePayload(putNameOnlyError)) {
+                  throw putNameOnlyError;
+                }
+                await apiClient.patch(`/fridge-items/${id}`, payloadNameOnly);
+              }
+            }
+          }
+        }
+      }
+          }
+        }
+      }
 
     } catch (e) {
       console.error('Error updating fridge item:', e);
+      throw e;
     }
   }
 };
