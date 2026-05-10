@@ -104,8 +104,13 @@ const RecipeDetailScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}>
+    <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}> 
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0C100D' : '#E9F5EE'} translucent={false} />
+      <View style={styles.backgroundDecoA} />
+      <View style={styles.backgroundDecoB} />
+      <View style={styles.backgroundDecoC} />
+      <View style={styles.backgroundDecoD} />
+      <View style={styles.backgroundDecoE} />
       <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={styles.scrollContent}>
         <SafeAreaView edges={['top']} style={styles.topActions}>
           <TouchableOpacity style={[styles.iconButton, isDark && styles.iconButtonDark]} onPress={() => router.back()} activeOpacity={0.9}>
@@ -182,7 +187,52 @@ const SHADOW_SM = Platform.select({
   android: { elevation: 3 },
 });
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#E9F5EE' },
+  root: { flex: 1, backgroundColor: '#E9F5EE', overflow: 'hidden' },
+  backgroundDecoA: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: COLORS.primary + '2A',
+    top: -80,
+    right: -46,
+  },
+  backgroundDecoB: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: COLORS.accent + '22',
+    bottom: -38,
+    left: -42,
+  },
+  backgroundDecoC: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: COLORS.primary + '14',
+    top: 220,
+    left: -28,
+  },
+  backgroundDecoD: {
+    position: 'absolute',
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    backgroundColor: COLORS.accent + '14',
+    top: 410,
+    right: -22,
+  },
+  backgroundDecoE: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.primary + '10',
+    bottom: 170,
+    left: 30,
+  },
   scrollContent: { paddingHorizontal: 18, paddingBottom: 36 },
   topActions: {
     paddingTop: 8,

@@ -96,10 +96,10 @@ const attachToClient = (client: AxiosInstance, logout: () => void): InterceptorI
           console.warn('[AuthDebug][TokenCleared]', {
             url,
             status,
-            reason: 'Unauthorized on /me route',
+            reason: 'Session expired on /me route',
           });
           await AsyncStorage.removeItem('userToken');
-          await AsyncStorage.setItem('authRedirectReason', 'user-error');
+          await AsyncStorage.setItem('authRedirectReason', 'session-expired');
         } catch {
         }
         logout();

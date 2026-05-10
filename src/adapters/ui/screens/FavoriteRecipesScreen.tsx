@@ -270,8 +270,13 @@ const FavoriteRecipesScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}>
+    <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}> 
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#0C100D' : DARK_GREEN} translucent={false} />
+      <View style={styles.backgroundDecoA} />
+      <View style={styles.backgroundDecoB} />
+      <View style={styles.backgroundDecoC} />
+      <View style={styles.backgroundDecoD} />
+      <View style={styles.backgroundDecoE} />
       {/* ══ BODY ══ */}
       <Animated.View
         style={[
@@ -459,7 +464,52 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
     opacity: 0.7,
   },
-  root: { flex: 1, backgroundColor: '#E9F5EE' },
+  root: { flex: 1, backgroundColor: '#E9F5EE', overflow: 'hidden' },
+  backgroundDecoA: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: COLORS.primary + '2A',
+    top: -80,
+    right: -46,
+  },
+  backgroundDecoB: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: COLORS.accent + '22',
+    bottom: -38,
+    left: -42,
+  },
+  backgroundDecoC: {
+    position: 'absolute',
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: COLORS.primary + '14',
+    top: 230,
+    left: -30,
+  },
+  backgroundDecoD: {
+    position: 'absolute',
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: COLORS.accent + '14',
+    top: 430,
+    right: -24,
+  },
+  backgroundDecoE: {
+    position: 'absolute',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: COLORS.primary + '10',
+    bottom: 180,
+    left: 34,
+  },
 
   // ── Scroll body
   scroll: { paddingHorizontal: 14, paddingTop: 6 },
@@ -677,6 +727,7 @@ const styles = StyleSheet.create({
   // ── Recipe Card
   recipeCardWrap: {
     marginBottom: 0,
+    marginHorizontal: 14,
   },
   recipeCard: {
     backgroundColor: '#FFFFFF',

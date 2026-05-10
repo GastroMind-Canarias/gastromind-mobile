@@ -25,14 +25,12 @@ const LoginScreen: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-  const { signIn, loading, error } = useAuth();
+  const { signIn, loading } = useAuth();
 
   const authRedirectError =
-    params.reason === 'user-error'
-      ? 'Hay un error con tu usuario. Inicia sesion nuevamente.'
-      : params.reason === 'not-logged-in'
-        ? 'No estas logeado. Inicia sesion para continuar.'
-        : null;
+    params.reason === 'session-expired'
+      ? 'Tu sesion ha caducado. Inicia sesion nuevamente.'
+      : null;
 
   const handleLogin = async () => {
     if (!username || !password) return;
@@ -73,8 +71,8 @@ const LoginScreen: React.FC = () => {
           </View>
 
           <View style={styles.form}>
-            {(authRedirectError || error) && (
-              <Text style={styles.errorText}>{authRedirectError ?? error}</Text>
+            {authRedirectError && (
+              <Text style={styles.errorText}>{authRedirectError}</Text>
             )}
             <CustomInput
               icon={Mail}

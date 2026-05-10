@@ -47,6 +47,9 @@ import { getNearExpiryItems } from '../../../shared/utils/expiry';
 const FRIDGE_DARK = '#0D1F17';   // verde muy oscuro (panel nevera)
 const FRIDGE_MID = '#1A3826';   // verde oscuro medio
 const ICE_BLUE = '#C8F0DC';   // tinte helado suave
+const FRIDGE_DARK_BG = '#14221A';
+const FRIDGE_DARK_SURFACE = '#173326';
+const FRIDGE_DARK_CARD = '#1B3327';
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
   ItemStatus,
@@ -209,17 +212,23 @@ function ItemCard({
     <Animated.View
       style={[
         styles.card,
-        isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '55' },
+        isDark && { backgroundColor: FRIDGE_DARK_CARD, borderColor: COLORS.secondary + '42' },
         { transform: [{ scale: scaleAnim }] },
       ]}
     >
+      <View style={[styles.cardOrganicAura, isDark && styles.cardOrganicAuraDark]} />
+      <View style={[styles.cardOrganicDotA, isDark && styles.cardOrganicDotADark]} />
+      <View style={[styles.cardOrganicDotB, isDark && styles.cardOrganicDotBDark]} />
       <View style={styles.cardBody}>
         <View style={styles.cardTopRow}>
           <View style={[styles.cardStatusSeal, { backgroundColor: cfg.bg, borderColor: cfg.color + '35' }]}> 
             <StatusIcon size={16} color={cfg.color} strokeWidth={2.6} />
             <Text style={[styles.cardStatusSealText, { color: cfg.color }]}>{cfg.label}</Text>
           </View>
-          <View style={[styles.cardStatusDot, { backgroundColor: cfg.color }]} />
+          <View style={styles.cardCornerInfo}>
+            <View style={[styles.cardStatusDot, { backgroundColor: cfg.color }]} />
+            <Text style={[styles.cardCornerDate, isDark && { color: COLORS.white + 'BA' }]}>Cad: {formatDate(item.expirationDate)}</Text>
+          </View>
         </View>
 
         <Text style={[styles.cardTitle, isDark && { color: COLORS.white }]} numberOfLines={2}>
@@ -227,7 +236,7 @@ function ItemCard({
         </Text>
 
         <View style={styles.metaRow}>
-          <View style={styles.metaPill}>
+          <View style={[styles.metaPill, isDark && styles.metaPillDark]}>
             <Snowflake size={13} color={COLORS.primary} strokeWidth={2.5} />
             <Text style={[styles.metaPillText, isDark && { color: COLORS.white }]}>{item.quantity} uds.</Text>
           </View>
@@ -235,13 +244,6 @@ function ItemCard({
             <StatusIcon size={13} color={expiryMeta.color} strokeWidth={2.5} />
             <Text style={[styles.metaPillText, { color: expiryMeta.color }]}>{expiryMeta.label}</Text>
           </View>
-        </View>
-
-        <View style={[styles.cardDateStrip, isDark && { borderColor: COLORS.white + '1F' }]}>
-          <Text style={[styles.cardDateLabel, isDark && { color: COLORS.white + 'A8' }]}>Caduca</Text>
-          <Text style={[styles.cardDateValue, isDark && { color: COLORS.white }]}>
-            {formatDate(item.expirationDate)}
-          </Text>
         </View>
 
         <View style={styles.cardActions}>
@@ -507,7 +509,7 @@ function TicketModal({
           <View
             style={[
               styles.ticketPlaceholder,
-              isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' },
+              isDark && { backgroundColor: FRIDGE_DARK_CARD, borderColor: colors.secondary + '66' },
             ]}
           >
             {isProcessing ? (
@@ -539,7 +541,7 @@ function TicketModal({
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
-                  style={[styles.ticketGalleryBtn, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]} 
+                  style={[styles.ticketGalleryBtn, isDark && { backgroundColor: FRIDGE_DARK_SURFACE, borderColor: colors.secondary + '66' }]} 
                   onPress={() => handlePickImage(false)}
                   activeOpacity={0.8}
                 >
@@ -553,7 +555,7 @@ function TicketModal({
           {!isProcessing && (
             <TouchableOpacity
               onPress={onClose}
-              style={[styles.sheetCloseBtn, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}
+              style={[styles.sheetCloseBtn, isDark && { backgroundColor: FRIDGE_DARK_SURFACE, borderColor: colors.secondary + '66' }]}
             >
               <Text style={[styles.sheetCloseBtnText, isDark && { color: COLORS.white }]}>Cerrar</Text>
             </TouchableOpacity>
@@ -631,7 +633,7 @@ function ItemFormModal({
                     key={s} onPress={() => setStatus(s)}
                     style={[
                       styles.statusOpt,
-                      isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' },
+                      isDark && { backgroundColor: FRIDGE_DARK_SURFACE, borderColor: colors.secondary + '66' },
                       active && { backgroundColor: cfg.color, borderColor: cfg.color },
                     ]}
                   >
@@ -651,7 +653,7 @@ function ItemFormModal({
             <View style={styles.formFooter}>
               <TouchableOpacity
                 onPress={onClose}
-                style={[styles.formBtnCancel, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}
+                style={[styles.formBtnCancel, isDark && { backgroundColor: FRIDGE_DARK_SURFACE, borderColor: colors.secondary + '66' }]}
               >
                 <Text style={[styles.formBtnCancelText, isDark && { color: COLORS.white }]}>Cancelar</Text>
               </TouchableOpacity>
@@ -936,10 +938,10 @@ export default function FridgeApp() {
   }
 
   return (
-    <View style={[styles.root, isDark && { backgroundColor: '#0C100D' }]}>
+    <View style={[styles.root, isDark && { backgroundColor: FRIDGE_DARK_BG }]}> 
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={isDark ? '#0C100D' : FRIDGE_DARK}
+        backgroundColor={isDark ? FRIDGE_DARK_BG : FRIDGE_DARK}
         translucent={false}
       />
       <View style={styles.ambientOrbA} />
@@ -949,7 +951,7 @@ export default function FridgeApp() {
         <View
           style={[
             styles.fridgeHeader,
-            isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
+            isDark && { backgroundColor: FRIDGE_DARK_SURFACE, borderColor: COLORS.secondary + '66' },
             { paddingTop: Math.max(insets.top + 8, Platform.OS === 'ios' ? 52 : 40) },
           ]}
         >
@@ -1003,7 +1005,7 @@ export default function FridgeApp() {
       </View>
 
       {/* ══ FRIDGE BODY ══ */}
-      <View style={[styles.fridgeBody, isDark && { backgroundColor: '#0C100D' }]}>
+      <View style={[styles.fridgeBody, isDark && { backgroundColor: FRIDGE_DARK_BG }]}> 
         <Animated.View style={[styles.listContainer, { opacity: fadeAnim }]}> 
           <FlatList
             style={styles.list}
@@ -1061,7 +1063,7 @@ export default function FridgeApp() {
                   isDark={isDark}
                   accessibilityLabel="Buscar producto"
                   wrapperStyle={{ marginBottom: 0 }}
-                  inputWrapStyle={[styles.searchWrap, isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}
+                  inputWrapStyle={[styles.searchWrap, isDark && { backgroundColor: FRIDGE_DARK_SURFACE, borderColor: COLORS.secondary + '66' }]}
                   inputStyle={[styles.searchInput, isDark && { color: COLORS.white }]}
                   placeholderTextColor={isDark ? COLORS.white + '66' : COLORS.text + '55'}
                   leftNode={<Search size={15} color={isDark ? COLORS.white + 'B8' : COLORS.text + '88'} strokeWidth={2.6} />}
@@ -1104,7 +1106,7 @@ export default function FridgeApp() {
                     onPress={() => setActiveFilter('ALL')}
                     style={[
                       styles.filterPill,
-                      isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
+                      isDark && { backgroundColor: FRIDGE_DARK_SURFACE, borderColor: COLORS.secondary + '66' },
                       activeFilter === 'ALL' && styles.filterPillActive,
                     ]}
                     accessibilityRole="button"
@@ -1136,7 +1138,7 @@ export default function FridgeApp() {
                         onPress={() => setActiveFilter(s)}
                         style={[
                           styles.filterPill,
-                          isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' },
+                          isDark && { backgroundColor: FRIDGE_DARK_SURFACE, borderColor: COLORS.secondary + '66' },
                           active && { backgroundColor: cfg.color, borderColor: cfg.color },
                         ]}
                         accessibilityRole="button"
@@ -1425,13 +1427,49 @@ const styles = StyleSheet.create({
 
   // ── Item card
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: '#F4F8F5',
+    borderRadius: 22,
     marginBottom: 12,
-    overflow: 'visible',
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#DDEBE2',
+    borderColor: '#DEE8E1',
     ...SHADOW_SM,
+  },
+  cardOrganicAura: {
+    position: 'absolute',
+    width: 140,
+    height: 110,
+    borderRadius: 70,
+    right: -28,
+    top: -36,
+    backgroundColor: '#CFE4D7',
+  },
+  cardOrganicAuraDark: {
+    backgroundColor: '#2A4B3A',
+  },
+  cardOrganicDotA: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    right: 18,
+    top: 18,
+    backgroundColor: '#95BBA4',
+  },
+  cardOrganicDotADark: {
+    backgroundColor: '#6FAF8A',
+  },
+  cardOrganicDotB: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    right: 36,
+    top: 34,
+    backgroundColor: '#B7CBBE',
+  },
+  cardOrganicDotBDark: {
+    backgroundColor: '#86C79E',
   },
   cardBody: { paddingHorizontal: 14, paddingVertical: 13 },
   cardTopRow: {
@@ -1459,6 +1497,16 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  cardCornerInfo: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  cardCornerDate: {
+    fontSize: 10,
+    color: '#4C6257',
+    fontWeight: '700',
+    opacity: 0.9,
+  },
   cardTitle: {
     fontSize: 17,
     fontWeight: '800',
@@ -1473,45 +1521,26 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: COLORS.primary + '22',
+    borderColor: '#D7E4DB',
+    backgroundColor: '#FAFCFA',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
+  metaPillDark: {
+    backgroundColor: '#244436',
+    borderColor: COLORS.secondary + '55',
+  },
   metaPillText: {
     fontSize: 11,
-    color: '#5B7065',
+    color: '#4C6257',
     fontWeight: '600',
-  },
-  cardDateStrip: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E7EFEA',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 10,
-    backgroundColor: '#F7FBF8',
-  },
-  cardDateLabel: {
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    color: '#6B7E74',
-    fontWeight: '700',
-  },
-  cardDateValue: {
-    fontSize: 13,
-    color: '#263A2F',
-    fontWeight: '700',
   },
   cardActions: {
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#EDF4EF',
+    borderTopColor: '#E4ECE6',
     paddingTop: 8,
   },
   cardBtn: {

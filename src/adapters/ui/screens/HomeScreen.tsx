@@ -2,6 +2,7 @@ import * as React from "react";
 import { router } from "expo-router";
 import { ROUTES } from "../navigation/routes";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   Animated,
   Easing,
@@ -195,8 +196,8 @@ const HomeScreen: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
-  const fetchData = useCallback(async () => {
-    setLoadingProfile(true);
+  const fetchData = useCallback(async (showLoader = true) => {
+    if (showLoader) setLoadingProfile(true);
     setLoadError(null);
     try {
       const [items, p] = await Promise.all([
@@ -213,12 +214,12 @@ const HomeScreen: React.FC = () => {
       setLoadError(message);
       setProfile(null);
     } finally {
-      setLoadingProfile(false);
+      if (showLoader) setLoadingProfile(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchData(true);
 
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -235,6 +236,12 @@ const HomeScreen: React.FC = () => {
       }),
     ]).start();
   }, [fadeAnim, slideAnim, fetchData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData(false).catch(() => {});
+    }, [fetchData]),
+  );
 
   useEffect(() => {
     const fetchNotificationSettings = async () => {
@@ -268,7 +275,7 @@ const HomeScreen: React.FC = () => {
         title="No se pudo cargar el inicio"
         message={loadError ?? "Intenta nuevamente en unos segundos."}
         actionLabel="Reintentar"
-        onAction={fetchData}
+        onAction={() => fetchData(true)}
         isDark={isDark}
       />
     );
@@ -356,6 +363,7 @@ const HomeScreen: React.FC = () => {
             color="#5BBCFF"
           />
         </View>
+
       </View>
 
       {/* ══ BODY ══ */}
@@ -440,7 +448,7 @@ const HomeScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.retryInlineBtn}
                 activeOpacity={0.85}
-                onPress={fetchData}
+                onPress={() => fetchData(true)}
                 accessibilityRole="button"
                 accessibilityLabel="Reintentar carga de inicio"
               >
@@ -449,46 +457,36 @@ const HomeScreen: React.FC = () => {
             </View>
           ) : null}
 
-          {/* ── Accesos rápidos ── */}
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: isDark ? COLORS.white : DARK_GREEN, opacity: isDark ? 0.8 : 0.5 }]}>Accesos rápidos</Text>
-            <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + "26" }]} />
-          </View>
+          <View style={[styles.organicPanel, isDark && styles.organicPanelDark]}>
+            <View style={styles.organicPanelDecoA} />
+            <View style={styles.organicPanelDecoB} />
+            <View style={[styles.organicDot, styles.organicDotA, isDark && styles.organicDotDark]} />
+            <View style={[styles.organicDot, styles.organicDotB, isDark && styles.organicDotDark]} />
+            <View style={[styles.organicDot, styles.organicDotC, isDark && styles.organicDotDark]} />
+            <View style={[styles.organicDot, styles.organicDotD, isDark && styles.organicDotDark]} />
+            <View style={[styles.organicDotSoft, styles.organicDotE, isDark && styles.organicDotSoftDark]} />
+            <View style={[styles.organicDotSoft, styles.organicDotF, isDark && styles.organicDotSoftDark]} />
 
-          <View style={styles.quickGrid}>
-            <QuickCard
-              icon={Snowflake}
-              title="Mi Nevera"
-              subtitle={`${freshCount} frescos`}
-              accentColor={COLORS.primary}
-              isDark={isDark}
-              onPress={() => router.push(ROUTES.appTabFridge)}
-            />
-          </View>
-
-          {/* ── Recetas IA ── */}
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: isDark ? COLORS.white : DARK_GREEN, opacity: isDark ? 0.8 : 0.5 }]}>Recetas con IA</Text>
-            <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + "26" }]} />
-          </View>
-
-          <View style={[styles.recipeHero, isDark && { borderWidth: 1, borderColor: COLORS.secondary + "4D" }]}>
-            {/* Decoraciones */}
+          <View style={[styles.recipeHero, styles.recipeHeroPrimary, isDark && { borderWidth: 1, borderColor: COLORS.secondary + "4D" }]}>
             <View style={styles.recipeHeroDeco1} />
             <View style={styles.recipeHeroDeco2} />
 
             <View style={styles.recipeHeroInner}>
-              <View style={styles.recipeHeroBadge}>
-                <Sparkles size={12} color={COLORS.primary} strokeWidth={2.6} />
-                <Text style={styles.recipeHeroBadgeText}>IA</Text>
+              <View style={styles.recipeHeroTopRow}>
+                <View style={styles.recipeHeroBadge}>
+                  <Sparkles size={12} color={COLORS.primary} strokeWidth={2.6} />
+                  <Text style={styles.recipeHeroBadgeText}>IA principal</Text>
+                </View>
+                <View style={[styles.aiChip, !isOnline && styles.aiChipOffline]}>
+                  <Text style={styles.aiChipText}>{isOnline ? "En linea" : "Sin conexion"}</Text>
+                </View>
               </View>
-              <Text style={[styles.recipeHeroTitle, { color: isDark ? COLORS.white : COLORS.white }]}>Tu próxima creación</Text>
-              <Text style={[styles.recipeHeroSub, { color: isDark ? COLORS.white : ICE, opacity: isDark ? 0.78 : 0.65 }]}>
-                GastroMind analizará tu nevera y tus utensilios para generar
-                recetas personalizadas solo para ti.
+              <Text style={[styles.recipeHeroTitle, styles.recipeHeroTitlePrimary, { color: COLORS.white }]}>Tu asistente de cocina IA</Text>
+              <Text style={[styles.recipeHeroSub, styles.recipeHeroSubPrimary, { color: isDark ? COLORS.white : ICE, opacity: isDark ? 0.8 : 0.7 }]}> 
+                Analiza tu nevera y utensilios para sugerirte recetas viables hoy.
               </Text>
               <TouchableOpacity
-                style={[styles.recipeHeroBtn, !isOnline && { opacity: 0.5 }]}
+                style={[styles.recipeHeroBtn, styles.recipeHeroBtnPrimary, !isOnline && { opacity: 0.5 }]}
                 activeOpacity={0.85}
                 onPress={() => {
                   if (!isOnline) return;
@@ -496,18 +494,56 @@ const HomeScreen: React.FC = () => {
                 }}
                 disabled={!isOnline}
                 accessibilityRole="button"
-                accessibilityLabel="Generar receta con inteligencia artificial"
+                accessibilityLabel="Abrir asistente de recetas con inteligencia artificial"
               >
-                <ChefHat size={14} color={COLORS.white} strokeWidth={2.6} />
-                <Text style={[styles.recipeHeroBtnText, { color: COLORS.white }]}>Generar receta</Text>
+                <ChefHat size={15} color={COLORS.white} strokeWidth={2.7} />
+                <Text style={[styles.recipeHeroBtnText, { color: COLORS.white }]}>Abrir asistente IA</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* ── Miembros del hogar ── */}
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: isDark ? COLORS.white : DARK_GREEN, opacity: isDark ? 0.8 : 0.5 }]}>Hogar</Text>
-            <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + "26" }]} />
+          <View style={styles.utilityGrid}>
+            <TouchableOpacity
+              style={[styles.utilityCard, isDark && styles.utilityCardDark]}
+              activeOpacity={0.85}
+              onPress={() => router.push(ROUTES.appTabFridge)}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir nevera"
+            >
+              <View style={[styles.utilityIconWrap, { backgroundColor: COLORS.primary + "20" }]}>
+                <Snowflake size={16} color={COLORS.primary} strokeWidth={2.5} />
+              </View>
+              <Text style={[styles.utilityTitle, isDark && styles.utilityTitleDark]}>Nevera</Text>
+              <Text style={[styles.utilitySub, isDark && styles.utilitySubDark]}>Gestiona productos</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.utilityCard, isDark && styles.utilityCardDark]}
+              activeOpacity={0.85}
+              onPress={() => router.push(ROUTES.appTabShopping)}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir lista de compras"
+            >
+              <View style={[styles.utilityIconWrap, { backgroundColor: COLORS.accent + "20" }]}>
+                <UtensilsCrossed size={16} color={COLORS.accent} strokeWidth={2.5} />
+              </View>
+              <Text style={[styles.utilityTitle, isDark && styles.utilityTitleDark]}>Compras</Text>
+              <Text style={[styles.utilitySub, isDark && styles.utilitySubDark]}>Prepara tu lista</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.utilityCard, isDark && styles.utilityCardDark]}
+              activeOpacity={0.85}
+              onPress={() => router.push(ROUTES.appTabProfile)}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir perfil"
+            >
+              <View style={[styles.utilityIconWrap, { backgroundColor: "#5BBCFF22" }]}>
+                <User size={16} color="#5BBCFF" strokeWidth={2.5} />
+              </View>
+              <Text style={[styles.utilityTitle, isDark && styles.utilityTitleDark]}>Perfil</Text>
+              <Text style={[styles.utilitySub, isDark && styles.utilitySubDark]}>Ajustes del hogar</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={[styles.householdCard, isDark && { backgroundColor: "#11351A", borderWidth: 1, borderColor: COLORS.secondary + "44" }]}> 
@@ -528,6 +564,7 @@ const HomeScreen: React.FC = () => {
               ))}
             </View>
             <View style={styles.householdInfo}>
+              <Text style={[styles.householdTopLabel, { color: isDark ? COLORS.white : DARK_GREEN }]}>Hogar</Text>
               <Text style={[styles.householdNames, { color: isDark ? COLORS.white : DARK_GREEN }]}>
                 {profile.householdMembers.length
                   ? profile.householdMembers.map((m) => m.name).join(", ")
@@ -544,6 +581,8 @@ const HomeScreen: React.FC = () => {
                   : `${memberCount} personas en el hogar`}
               </Text>
             </View>
+          </View>
+
           </View>
 
         </ScrollView>
@@ -753,7 +792,70 @@ const styles = StyleSheet.create({
   },
 
   // ── Scroll body
-  scroll: { paddingHorizontal: 16, paddingTop: 12 },
+  scroll: { paddingHorizontal: 16, paddingTop: 10 },
+
+  organicPanel: {
+    marginTop: 6,
+    marginBottom: 8,
+    marginHorizontal: 0,
+    paddingHorizontal: 0,
+    paddingTop: 8,
+    borderRadius: 0,
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    borderColor: "transparent",
+    overflow: "visible",
+  },
+  organicPanelDark: {
+    backgroundColor: "transparent",
+    borderColor: "transparent",
+  },
+  organicPanelDecoA: {
+    position: "absolute",
+    width: 180,
+    height: 120,
+    borderRadius: 90,
+    backgroundColor: COLORS.primary + "0D",
+    top: -52,
+    right: -36,
+    transform: [{ rotate: "-14deg" }],
+  },
+  organicPanelDecoB: {
+    position: "absolute",
+    width: 130,
+    height: 90,
+    borderRadius: 65,
+    backgroundColor: COLORS.accent + "12",
+    bottom: -38,
+    left: -34,
+    transform: [{ rotate: "12deg" }],
+  },
+  organicDot: {
+    position: "absolute",
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary + "26",
+  },
+  organicDotSoft: {
+    position: "absolute",
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.accent + "2E",
+  },
+  organicDotDark: {
+    backgroundColor: COLORS.primary + "3A",
+  },
+  organicDotSoftDark: {
+    backgroundColor: COLORS.accent + "42",
+  },
+  organicDotA: { top: 24, right: 22 },
+  organicDotB: { top: 72, left: 10 },
+  organicDotC: { top: 168, right: 8 },
+  organicDotD: { bottom: 30, left: 18 },
+  organicDotE: { top: 116, right: 54 },
+  organicDotF: { bottom: 92, right: 24 },
 
   // Alert banner
   alertBanner: {
@@ -819,7 +921,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 10,
     gap: 10,
   },
   sectionTitle: {
@@ -827,17 +929,51 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: DARK_GREEN,
     opacity: 0.5,
-    letterSpacing: 0.9,
+    letterSpacing: 0.7,
     textTransform: "uppercase",
   },
-  sectionLine: { flex: 1, height: 1, backgroundColor: DARK_GREEN + "15" },
+  sectionLine: { flex: 1, height: 2, borderRadius: 99, backgroundColor: DARK_GREEN + "12" },
 
   // Quick grid
-  quickGrid: { flexDirection: "row", gap: 10, marginBottom: 16 },
+  quickGrid: { flexDirection: "row", gap: 10, marginBottom: 14 },
+  snapRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EAF4ED",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#DFECE3",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginBottom: 12,
+    ...SHADOW_SM,
+  },
+  snapRowDark: {
+    backgroundColor: "#133022",
+    borderColor: COLORS.secondary + "40",
+  },
+  snapItem: { flex: 1, alignItems: "center", justifyContent: "center" },
+  snapValue: { fontSize: 20, fontWeight: "900", letterSpacing: -0.4 },
+  snapLabel: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: "700",
+    color: DARK_GREEN,
+    opacity: 0.6,
+  },
+  snapLabelDark: { color: COLORS.white, opacity: 0.72 },
+  snapDivider: {
+    width: 1,
+    alignSelf: "stretch",
+    backgroundColor: DARK_GREEN + "16",
+    marginVertical: 4,
+  },
   quickCard: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: "#EDF6F0",
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E0EDE4",
     overflow: "hidden",
     ...SHADOW_SM,
   },
@@ -868,10 +1004,14 @@ const styles = StyleSheet.create({
   // Recipe hero card
   recipeHero: {
     backgroundColor: DARK_GREEN,
-    borderRadius: 24,
+    borderRadius: 28,
     overflow: "hidden",
-    marginBottom: 18,
+    marginBottom: 14,
     ...SHADOW_MD,
+  },
+  recipeHeroPrimary: {
+    marginBottom: 12,
+    borderRadius: 30,
   },
   recipeHeroDeco1: {
     position: "absolute",
@@ -892,6 +1032,13 @@ const styles = StyleSheet.create({
     left: 20,
   },
   recipeHeroInner: { paddingHorizontal: 18, paddingVertical: 16 },
+  recipeHeroTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    gap: 8,
+  },
   recipeHeroBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -918,12 +1065,21 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     marginBottom: 6,
   },
+  recipeHeroTitlePrimary: {
+    fontSize: 23,
+    marginBottom: 7,
+  },
   recipeHeroSub: {
     fontSize: 12,
     color: ICE,
     opacity: 0.65,
     lineHeight: 17,
     marginBottom: 12,
+  },
+  recipeHeroSubPrimary: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 14,
   },
   recipeHeroBtn: {
     flexDirection: "row",
@@ -936,17 +1092,90 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     ...SHADOW_PRIMARY,
   },
+  recipeHeroBtnPrimary: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
   recipeHeroBtnText: { color: COLORS.white, fontWeight: "800", fontSize: 13 },
+  aiChip: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "55",
+    backgroundColor: COLORS.primary + "26",
+  },
+  aiChipOffline: {
+    borderColor: COLORS.error + "66",
+    backgroundColor: COLORS.error + "26",
+  },
+  aiChipText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+
+  utilityGrid: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+  },
+  utilityCard: {
+    flex: 1,
+    backgroundColor: "#EDF6F0",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#DEEBE2",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    ...SHADOW_SM,
+  },
+  utilityCardDark: {
+    backgroundColor: "#123022",
+    borderColor: COLORS.secondary + "38",
+  },
+  utilityIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  utilityTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: DARK_GREEN,
+    marginBottom: 2,
+  },
+  utilityTitleDark: {
+    color: COLORS.white,
+  },
+  utilitySub: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: DARK_GREEN,
+    opacity: 0.58,
+  },
+  utilitySubDark: {
+    color: COLORS.white,
+    opacity: 0.72,
+  },
 
   // Household card
   householdCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: "#EDF6F0",
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E0EDE4",
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    marginBottom: 24,
+    marginBottom: 8,
     ...SHADOW_SM,
   },
   householdAvatars: { flexDirection: "row", alignItems: "center" },
@@ -965,6 +1194,14 @@ const styles = StyleSheet.create({
     }),
   },
   householdInfo: { flex: 1 },
+  householdTopLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+    opacity: 0.5,
+    marginBottom: 3,
+  },
   householdNames: { fontSize: 14, fontWeight: "800", color: DARK_GREEN },
   householdSub: {
     fontSize: 12,

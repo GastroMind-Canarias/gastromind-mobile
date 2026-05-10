@@ -1,4 +1,4 @@
-import { Airplay, ArrowLeft, ArrowRight, Check, ChefHat, CookingPot, Cpu, Flame, House, Link2, Lock, Mail, Microwave, RotateCw, ShieldAlert, Sparkles, User, Users, UtensilsCrossed, Wheat, Wind, Zap, type LucideIcon } from 'lucide-react-native';
+import { Airplay, ArrowLeft, ArrowRight, Check, ChefHat, Cpu, Flame, House, Link2, Lock, Mail, Microwave, RotateCw, ShieldAlert, Sparkles, User, Users, UtensilsCrossed, Wheat, Wind, Zap, type LucideIcon } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { ROUTES } from '../navigation/routes';
 import React, { useEffect, useRef, useState } from 'react';
@@ -68,8 +68,9 @@ const APPLIANCE_ICONS: Record<string, LucideIcon> = {
   AIR_FRYER: Wind,
   VITROCERAMICA: Zap,
   ROBOT_COCINA: Cpu,
-  BATIDORA: RotateCw,
-  OLLA_EXPRESS: CookingPot,
+  OLLA_EXPRESS: UtensilsCrossed,
+  FREIDORA: RotateCw,
+  GRILL: Flame,
 };
 
 const APPLIANCE_OPTIONS = [
@@ -78,8 +79,9 @@ const APPLIANCE_OPTIONS = [
   { id: 'AIR_FRYER', name: 'Air Fryer' },
   { id: 'VITROCERAMICA', name: 'Vitrocerámica' },
   { id: 'ROBOT_COCINA', name: 'Robot de Cocina' },
-  { id: 'BATIDORA', name: 'Batidora' },
   { id: 'OLLA_EXPRESS', name: 'Olla express' },
+  { id: 'FREIDORA', name: 'Freidora' },
+  { id: 'GRILL', name: 'Grill' },
 ];
 
 // ─── Step indicator ────────────────────────────────────────────────────────────
@@ -240,12 +242,21 @@ const RegisterScreen: React.FC = () => {
           setLocalError('Por favor, completa todos los campos');
           return false;
         }
+        if (form.username.trim().length < 3) {
+          setLocalError('El usuario debe tener al menos 3 caracteres');
+          return false;
+        }
+        const cleanEmail = form.email.trim();
+        if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+          setLocalError('El correo debe incluir @ y .');
+          return false;
+        }
         if (form.password !== form.confirmPassword) {
           setLocalError('Las contraseñas no coinciden');
           return false;
         }
-        if (form.password.length < 6) {
-          setLocalError('La contraseña debe tener al menos 6 caracteres');
+        if (form.password.length < 8) {
+          setLocalError('La contraseña debe tener al menos 8 caracteres');
           return false;
         }
         return true;

@@ -68,10 +68,9 @@ const APPLIANCE_TO_TOOL: Record<string, KitchenTool> = {
   AIR_FRYER: KitchenTool.AIR_FRYER,
   VITROCERAMICA: KitchenTool.VITROCERAMICA,
   ROBOT_COCINA: KitchenTool.ROBOT_COCINA,
-  BATIDORA: KitchenTool.BATIDORA,
-  SARTEN: KitchenTool.SARTEN,
-  SARTÉN: KitchenTool.SARTEN,
-  OLLA_EXPRESS: KitchenTool.SARTEN,
+  OLLA_EXPRESS: KitchenTool.OLLA_EXPRESS,
+  FREIDORA: KitchenTool.FREIDORA,
+  GRILL: KitchenTool.GRILL,
 };
 
 const TOOL_TO_APPLIANCE: Record<KitchenTool, string> = Object.entries(
@@ -119,33 +118,6 @@ function extractAllergenIds(allergens?: any[]): string[] {
   );
 }
 
-type RequestMethod = "post" | "put" | "patch";
-
-async function requestWithFallback(
-  attempts: Array<{ method: RequestMethod; url: string; data: any }>,
-): Promise<void> {
-  let lastError: any = null;
-
-  for (const attempt of attempts) {
-    try {
-      await apiClient.request({
-        method: attempt.method,
-        url: attempt.url,
-        data: attempt.data,
-      });
-      return;
-    } catch (error: any) {
-      lastError = error;
-      const status = error?.response?.status;
-      if (status !== 403 && status !== 404 && status !== 405) {
-        break;
-      }
-    }
-  }
-
-  throw lastError;
-}
-
 function logApiError(context: string, error: any): void {
   console.error(context, {
     status: error?.response?.status,
@@ -176,22 +148,47 @@ async function updateMyAllergensBatch(allergenIds: string[]): Promise<void> {
 }
 
 async function updateMyAppliancesBatch(applianceTypes: string[]): Promise<void> {
-  const types = unique(
-    applianceTypes.map((item) => {
-      const normalized = item.toUpperCase();
-      return normalized === "SARTEN" || normalized === "SARTÉN"
-        ? "OLLA_EXPRESS"
-        : normalized;
-    }),
+  const endpoint = "/households/me/appliances/batch";
+  const nextAppliances = unique(
+    applianceTypes
+      .map((item) => item.toUpperCase().trim())
+      .filter(Boolean),
   );
-  const payload = { appliances: types };
-  const attempts: Array<{ method: RequestMethod; url: string; data: any }> = [
-    { method: "post", url: "/households/me/appliances/batch", data: payload },
-    { method: "put", url: "/households/me/appliances/batch", data: payload },
-    { method: "patch", url: "/households/me/appliances/batch", data: payload },
-  ];
 
-  await requestWithFallback(attempts);
+  const payload = {
+    appliances: nextAppliances,
+  };
+
+  const baseUrl = apiClient.defaults.baseURL || "";
+  const fullUrl = `${baseUrl}${endpoint}`;
+
+  console.log("[ProfileDebug][UpdateAppliancesBatch][Request]", {
+    method: "post",
+    endpoint,
+    fullUrl,
+    payload,
+  });
+
+  try {
+    await apiClient.post(endpoint, payload);
+    console.log("[ProfileDebug][UpdateAppliancesBatch][Success]", {
+      method: "post",
+      endpoint,
+      fullUrl,
+      payload,
+    });
+  } catch (error: any) {
+    console.error("[ProfileDebug][UpdateAppliancesBatch][Error]", {
+      method: "post",
+      endpoint,
+      fullUrl,
+      payload,
+      status: error?.response?.status,
+      responseData: error?.response?.data,
+      message: error?.message,
+    });
+    throw error;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -114,6 +114,11 @@ export default function ShoppingHabitsScreen() {
       edges={['top']}
     >
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? colors.background : DARK} />
+      <View style={styles.backgroundDecoA} />
+      <View style={styles.backgroundDecoB} />
+      <View style={styles.backgroundDecoC} />
+      <View style={styles.backgroundDecoD} />
+      <View style={styles.backgroundDecoE} />
 
         <View style={[styles.header, isDark && { backgroundColor: colors.forest }]}> 
         <Text style={styles.headerEyebrow}>Compra inteligente</Text>
@@ -177,7 +182,52 @@ export default function ShoppingHabitsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#EDF6F0' },
+  root: { flex: 1, backgroundColor: '#EDF6F0', overflow: 'hidden' },
+  backgroundDecoA: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: COLORS.primary + '26',
+    top: -84,
+    right: -50,
+  },
+  backgroundDecoB: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: COLORS.accent + '22',
+    bottom: -36,
+    left: -40,
+  },
+  backgroundDecoC: {
+    position: 'absolute',
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: COLORS.primary + '14',
+    top: 210,
+    left: -24,
+  },
+  backgroundDecoD: {
+    position: 'absolute',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: COLORS.accent + '14',
+    top: 380,
+    right: -28,
+  },
+  backgroundDecoE: {
+    position: 'absolute',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: COLORS.primary + '10',
+    bottom: 170,
+    left: 22,
+  },
   header: {
     backgroundColor: DARK,
     paddingHorizontal: 18,

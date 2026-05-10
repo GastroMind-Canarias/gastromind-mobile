@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -77,25 +76,26 @@ const AIChatScreen: React.FC = () => {
         throw new Error('Indica un numero valido de comensales.');
       }
 
-      const token = await AsyncStorage.getItem('userToken');
-
-      if (!token) {
-        throw new Error('No se encontro el token de usuario.');
-      }
-
       const response = await apiClient.post<SuggestionResponse>(
         '/households/me/recipes/suggestions',
         { servings },
         {
-          headers: {
-            Accept: '*/*',
-            Authorization: `Bearer ${token}`,
-          },
+          timeout: 60000,
         }
       );
 
       setSuggestion(response.data);
     } catch (e: any) {
+      console.error('[AIChat][Suggestion][Error]', {
+        url: e?.config?.url,
+        baseURL: e?.config?.baseURL,
+        method: e?.config?.method,
+        timeout: e?.config?.timeout,
+        code: e?.code,
+        message: e?.message,
+        status: e?.response?.status,
+        responseData: e?.response?.data,
+      });
       const message =
         e?.response?.data?.message ||
         e?.message ||

@@ -3,27 +3,8 @@ import { useNetwork } from '@/src/shared/network/NetworkProvider';
 import { Tabs } from 'expo-router';
 import { Heart, Home, Refrigerator, ShoppingCart, UserCircle2 } from 'lucide-react-native';
 import React from 'react';
-import { Platform, TouchableOpacity, View } from 'react-native';
+import { Platform, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-function TabIcon({ focused, children, activeColor }: { focused: boolean; children: React.ReactNode; activeColor: string }) {
-  return (
-    <View style={{ alignItems: 'center' }}>
-      {children}
-      {focused && (
-        <View
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: 3,
-            backgroundColor: activeColor,
-            marginTop: 3,
-          }}
-        />
-      )}
-    </View>
-  );
-}
 
 /** Altura útil icono + label; el padding superior/inferior y insets.bottom suman al alto total. */
 const TAB_BAR_CONTENT = 52;
@@ -96,9 +77,7 @@ export default function TabsLayout() {
           title: 'Inicio',
           tabBarButton: makeOfflineTabButton(!isOnline),
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon focused={focused} activeColor={colors.primary}>
-              <Home size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
-            </TabIcon>
+            <Home size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
           ),
         }}
       />
@@ -108,9 +87,7 @@ export default function TabsLayout() {
           title: 'Nevera',
           tabBarButton: makeOfflineTabButton(!isOnline),
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon focused={focused} activeColor={colors.primary}>
-              <Refrigerator size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
-            </TabIcon>
+            <Refrigerator size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
           ),
         }}
       />
@@ -119,9 +96,7 @@ export default function TabsLayout() {
         options={{
           title: 'Favoritos',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon focused={focused} activeColor={colors.primary}>
-              <Heart size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
-            </TabIcon>
+            <Heart size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
           ),
         }}
       />
@@ -131,9 +106,7 @@ export default function TabsLayout() {
           title: 'Compras',
           tabBarButton: makeOfflineTabButton(!isOnline),
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon focused={focused} activeColor={colors.primary}>
-              <ShoppingCart size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
-            </TabIcon>
+            <ShoppingCart size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
           ),
         }}
       />
@@ -143,9 +116,7 @@ export default function TabsLayout() {
           title: 'Perfil',
           tabBarButton: makeOfflineTabButton(!isOnline),
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon focused={focused} activeColor={colors.primary}>
-              <UserCircle2 size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
-            </TabIcon>
+            <UserCircle2 size={size} color={color} strokeWidth={focused ? 2.5 : 1.8} />
           ),
         }}
       />

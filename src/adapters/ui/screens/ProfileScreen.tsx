@@ -87,8 +87,9 @@ const TOOL_CONFIG: Record<
     label: "Robot de cocina",
     tint: "#7E9EFF",
   },
-  [KitchenTool.BATIDORA]: { icon: Sparkles, label: "Batidora", tint: "#6CC5B7" },
-  [KitchenTool.SARTEN]: { icon: UtensilsCrossed, label: "Olla express", tint: COLORS.primary },
+  [KitchenTool.OLLA_EXPRESS]: { icon: CookingPot, label: "Olla express", tint: COLORS.primary },
+  [KitchenTool.FREIDORA]: { icon: Sparkles, label: "Freidora", tint: "#6CC5B7" },
+  [KitchenTool.GRILL]: { icon: UtensilsCrossed, label: "Grill", tint: "#7E9EFF" },
 };
 
 const ALLERGEN_ICONS: Record<string, LucideIcon> = {
@@ -917,16 +918,6 @@ export default function ProfileScreen() {
             <View style={styles.identityTextBlock}>
               <Text style={[styles.profileNameDark, isDarkMode && styles.profileNameDarkMode]}>{profile.name}</Text>
               <Text style={[styles.profileEmailDark, isDarkMode && styles.profileEmailDarkMode]}>{profile.email}</Text>
-              <View style={styles.identityMetaRow}>
-                <View style={[styles.metaPill, isDarkMode && styles.metaPillDark]}>
-                  <Sparkles size={11} color={COLORS.primary} strokeWidth={2.6} />
-                  <Text style={[styles.metaPillText, isDarkMode && styles.metaPillTextDark]}>Cuenta activa</Text>
-                </View>
-                <View style={[styles.metaPill, isDarkMode && styles.metaPillDark]}>
-                  <ShieldAlert size={11} color={COLORS.error} strokeWidth={2.8} />
-                  <Text style={[styles.metaPillText, isDarkMode && styles.metaPillTextDark]}>Privacidad</Text>
-                </View>
-              </View>
             </View>
           </View>
 
@@ -1061,24 +1052,6 @@ export default function ProfileScreen() {
               );
             })}
           </View>
-        </View>
-
-        <View
-          style={[
-            styles.editHintCard,
-            (isEditingTools || isEditingAllergens) && styles.editHintCardActive,
-          ]}
-        >
-          <Text
-            style={[
-              styles.editHintText,
-              (isEditingTools || isEditingAllergens) && styles.editHintTextActive,
-            ]}
-          >
-            {isEditingTools || isEditingAllergens
-              ? "Toca las opciones para preparar el JSON y pulsa Guardar en esa seccion."
-              : "Pulsa Editar en cada seccion para preparar cambios antes de enviarlos."}
-          </Text>
         </View>
 
         <View style={[styles.section, isDarkMode && styles.sectionDark]}>

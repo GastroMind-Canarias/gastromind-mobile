@@ -79,11 +79,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const atIndex = segment0 === 'index' || segs.length === 0;
 
     const redirectToLoginWithAuthError = async () => {
-      let reason = 'not-logged-in';
+      let reason: string | undefined;
       try {
         const storedReason = await AsyncStorage.getItem('authRedirectReason');
-        if (storedReason === 'user-error') {
-          reason = 'user-error';
+        if (storedReason === 'session-expired') {
+          reason = 'session-expired';
         }
         await AsyncStorage.removeItem('authRedirectReason');
       } catch {
@@ -91,7 +91,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
       router.replace({
         pathname: ROUTES.authLogin,
-        params: { reason },
+        params: reason ? { reason } : {},
       } as never);
     };
 
