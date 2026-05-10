@@ -201,15 +201,7 @@ export const fridgeService = {
 
   delete: async (id: string): Promise<void> => {
     try {
-      try {
-        await apiClient.post('/fridge-items/me/delete', { id });
-      } catch (deleteError: any) {
-        const status = asErrorStatus(deleteError);
-        if (status !== 404 && status !== 405) {
-          throw deleteError;
-        }
-        await apiClient.delete(`/fridge-items/${id}`);
-      }
+      await apiClient.delete(`/fridge-items/me/${id}`);
     } catch (e) {
       console.error('Error deleting fridge item:', e);
       throw e;
@@ -262,82 +254,26 @@ export const fridgeService = {
         status: nextStatus,
       };
 
-      const updatePayloadCamel = {
-        id,
-        ...payloadCamel,
-      };
-
-      const updatePayloadSnake = {
-        id,
-        ...payloadSnake,
-      };
-
-      const updatePayloadNameOnly = {
-        id,
-        ...payloadNameOnly,
-      };
-
       try {
-        await apiClient.post('/fridge-items/me/update', updatePayloadCamel);
-      } catch (postUpdateError: any) {
-        if (!canRetryUpdatePayload(postUpdateError)) {
-          throw postUpdateError;
-        }
-
-        try {
-          await apiClient.post('/fridge-items/me/update', updatePayloadSnake);
-        } catch (postUpdateSnakeError: any) {
-          if (!canRetryUpdatePayload(postUpdateSnakeError)) {
-            throw postUpdateSnakeError;
-          }
-
-          try {
-            await apiClient.post('/fridge-items/me/update', updatePayloadNameOnly);
-          } catch (postUpdateNameOnlyError: any) {
-            if (!canRetryUpdatePayload(postUpdateNameOnlyError)) {
-              throw postUpdateNameOnlyError;
-            }
-
-            try {
-              await apiClient.put(`/fridge-items/${id}`, payloadCamel);
-            } catch (putError: any) {
+        await apiClient.put(`/fridge-items/me/${id}`, payloadCamel);
+      } catch (putError: any) {
         if (!canRetryUpdatePayload(putError)) {
           throw putError;
         }
 
         try {
-          await apiClient.patch(`/fridge-items/${id}`, payloadCamel);
+          await apiClient.put(`/fridge-items/me/${id}`, payloadSnake);
         } catch (patchCamelError: any) {
           if (!canRetryUpdatePayload(patchCamelError)) {
             throw patchCamelError;
           }
 
           try {
-            await apiClient.put(`/fridge-items/${id}`, payloadSnake);
+            await apiClient.put(`/fridge-items/me/${id}`, payloadNameOnly);
           } catch (putSnakeError: any) {
             if (!canRetryUpdatePayload(putSnakeError)) {
               throw putSnakeError;
             }
-
-            try {
-              await apiClient.patch(`/fridge-items/${id}`, payloadSnake);
-            } catch (patchSnakeError: any) {
-              if (!canRetryUpdatePayload(patchSnakeError)) {
-                throw patchSnakeError;
-              }
-
-              try {
-                await apiClient.put(`/fridge-items/${id}`, payloadNameOnly);
-              } catch (putNameOnlyError: any) {
-                if (!canRetryUpdatePayload(putNameOnlyError)) {
-                  throw putNameOnlyError;
-                }
-                await apiClient.patch(`/fridge-items/${id}`, payloadNameOnly);
-              }
-            }
-          }
-        }
-      }
           }
         }
       }
