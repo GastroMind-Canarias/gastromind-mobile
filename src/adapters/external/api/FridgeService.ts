@@ -53,6 +53,7 @@ const resolveProductName = (product: any): string => {
   return '';
 };
 
+
 const asErrorStatus = (error: any): number | null => {
   const status = error?.response?.status;
   return typeof status === 'number' ? status : null;
@@ -101,6 +102,7 @@ export const fridgeService = {
       const meResponse = await apiClient.get('/fridge-items/me');
       return resolveItemsList(meResponse.data).map((item: any) => ({
         id: item.id,
+        productId: item.productId || item.product_id || item.product?.id,
         quantity: item.quantity,
         expirationDate: item.expirationDate,
         status: item.status,
@@ -115,6 +117,7 @@ export const fridgeService = {
         const legacyResponse = await apiClient.get(`/fridge-items/fridge/${fridgeId}`);
         return resolveItemsList(legacyResponse.data).map((item: any) => ({
           id: item.id,
+          productId: item.productId || item.product_id || item.product?.id,
           quantity: item.quantity,
           expirationDate: item.expirationDate,
           status: item.status,
@@ -181,6 +184,7 @@ export const fridgeService = {
 
       return {
         id: responseData.id,
+        productId: responseData.productId || responseData.product_id || responseData.product?.id,
         quantity: responseData.quantity,
         expirationDate: responseData.expirationDate || responseData.expiration_date,
         status: (responseData.status || item.status) as ItemStatus,
@@ -201,9 +205,34 @@ export const fridgeService = {
 
   delete: async (id: string): Promise<void> => {
     try {
-      await apiClient.delete(`/fridge-items/me/${id}`);
+      const endpoint = `/fridge-items/me/${id}`;
+      const payload = { itemId: id };
+
+      console.log('[FridgeDebug][Delete][Request]', {
+        method: 'delete',
+        endpoint,
+        baseURL: apiClient.defaults.baseURL,
+        fullUrl: `${apiClient.defaults.baseURL || ''}${endpoint}`,
+        itemId: id,
+        payload,
+      });
+
+      await apiClient.delete(endpoint, { data: payload });
+
+      console.log('[FridgeDebug][Delete][Success]', {
+        method: 'delete',
+        endpoint,
+        itemId: id,
+      });
     } catch (e) {
-      console.error('Error deleting fridge item:', e);
+      console.error('[FridgeDebug][Delete][Error]', {
+        itemId: id,
+        message: (e as any)?.message,
+        status: (e as any)?.response?.status,
+        responseData: (e as any)?.response?.data,
+        endpoint: (e as any)?.config?.url,
+        method: (e as any)?.config?.method,
+      });
       throw e;
     }
   },
@@ -215,71 +244,44 @@ export const fridgeService = {
 
   update: async (id: string, updatedData: Partial<FridgeItem>): Promise<void> => {
     try {
-      const itemRes = await apiClient.get(`/fridge-items/${id}`);
-      const current = itemRes.data;
-
-      const nextProduct =
-        updatedData.product !== undefined
-          ? updatedData.product
-          : current.productName || current.product_name || current.product?.name || current.product;
-      const nextFridgeId = updatedData.fridgeId || current.fridgeId || current.fridge_id;
-      const nextQuantity = updatedData.quantity !== undefined ? updatedData.quantity : current.quantity;
-      const nextExpirationDate =
-        updatedData.expirationDate !== undefined
-          ? updatedData.expirationDate
-          : current.expirationDate || current.expiration_date;
-      const nextStatus = updatedData.status !== undefined ? updatedData.status : current.status;
-
-      const payloadCamel = {
-        productName: nextProduct,
-        fridgeId: nextFridgeId,
-        quantity: nextQuantity,
-        expirationDate: nextExpirationDate,
-        status: nextStatus,
+      const nextQuantity = Number(updatedData.quantity);
+      const nextExpirationDate = String(updatedData.expirationDate || '').trim();
+      const nextStatus = String(updatedData.status || '').toUpperCase();
+      const endpoint = `/fridge-items/me/${id}`;
+      const payload = {
+        quantity: Number(nextQuantity),
+        expirationDate: String(nextExpirationDate || '').trim(),
+        status: String(nextStatus || '').toUpperCase(),
       };
 
-      const payloadSnake = {
-        product_name: nextProduct,
-        fridge_id: nextFridgeId,
-        quantity: nextQuantity,
-        expiration_date: nextExpirationDate,
-        status: nextStatus,
-      };
+      console.log('[FridgeDebug][Update][Request]', {
+        method: 'put',
+        endpoint,
+        baseURL: apiClient.defaults.baseURL,
+        fullUrl: `${apiClient.defaults.baseURL || ''}${endpoint}`,
+        itemId: id,
+        payload,
+      });
 
-      const payloadNameOnly = {
-        product: nextProduct,
-        fridgeId: nextFridgeId,
-        quantity: nextQuantity,
-        expirationDate: nextExpirationDate,
-        status: nextStatus,
-      };
+      await apiClient.put(endpoint, payload);
 
-      try {
-        await apiClient.put(`/fridge-items/me/${id}`, payloadCamel);
-      } catch (putError: any) {
-        if (!canRetryUpdatePayload(putError)) {
-          throw putError;
-        }
-
-        try {
-          await apiClient.put(`/fridge-items/me/${id}`, payloadSnake);
-        } catch (patchCamelError: any) {
-          if (!canRetryUpdatePayload(patchCamelError)) {
-            throw patchCamelError;
-          }
-
-          try {
-            await apiClient.put(`/fridge-items/me/${id}`, payloadNameOnly);
-          } catch (putSnakeError: any) {
-            if (!canRetryUpdatePayload(putSnakeError)) {
-              throw putSnakeError;
-            }
-          }
-        }
-      }
+      console.log('[FridgeDebug][Update][Success]', {
+        method: 'put',
+        endpoint,
+        itemId: id,
+        payload,
+      });
 
     } catch (e) {
-      console.error('Error updating fridge item:', e);
+      console.error('[FridgeDebug][Update][Error]', {
+        itemId: id,
+        message: (e as any)?.message,
+        status: (e as any)?.response?.status,
+        responseData: (e as any)?.response?.data,
+        endpoint: (e as any)?.config?.url,
+        method: (e as any)?.config?.method,
+        requestData: (e as any)?.config?.data,
+      });
       throw e;
     }
   }

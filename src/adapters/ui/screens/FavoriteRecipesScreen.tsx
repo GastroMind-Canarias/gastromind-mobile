@@ -3,7 +3,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { pushRecipeDetail } from '../navigation/routes';
 import { favoriteService, UserFavorite } from '../../external/api/FavoriteService';
 import {
-  Alert,
   Animated,
   Easing,
   FlatList,
@@ -26,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppStateView from '../components/AppStateView';
 import AppBanner from '../components/AppBanner';
 import AppEmptyState from '../components/AppEmptyState';
+import { AppDialog, type AppDialogAction } from '../components/AppDialog';
 
 // ─── Constantes de tema (idénticas al resto de pantallas) ─────────────────────
 const DARK_GREEN = '#0D1F17';
@@ -50,7 +50,7 @@ const RecipeCard: React.FC<{
   return (
     <Animated.View style={[styles.recipeCardWrap, { transform: [{ scale }] }]}> 
       <TouchableOpacity
-        style={[styles.recipeCard, isDark && { backgroundColor: '#11351A', borderWidth: 1, borderColor: COLORS.secondary + '55' }]}
+        style={[styles.recipeCard, isDark && styles.recipeCardDark]}
         onPress={onPress}
         onPressIn={pressIn}
         onPressOut={pressOut}
@@ -67,7 +67,7 @@ const RecipeCard: React.FC<{
               <Text style={[styles.recipeTitle, isDark && { color: COLORS.white }]} numberOfLines={2}>{recipe.title}</Text>
             </View>
             <TouchableOpacity
-              style={styles.removeBadgeInline}
+              style={[styles.removeBadgeInline, isDark && styles.removeBadgeInlineDark]}
               onPress={(event: GestureResponderEvent) => {
                 event.stopPropagation();
                 onRemove();
@@ -82,22 +82,22 @@ const RecipeCard: React.FC<{
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.recipeDesc, isDark && { color: COLORS.white, opacity: 0.78 }]} numberOfLines={2}>{cardDescription}</Text>
+          <Text style={[styles.recipeDesc, isDark && styles.recipeDescDark]} numberOfLines={2}>{cardDescription}</Text>
 
           <View style={styles.recipeStats}>
-            <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
+            <View style={[styles.statItem, isDark && styles.statItemDark]}>
               <Clock3 size={12} color={isDark ? COLORS.white : DARK_GREEN} strokeWidth={2.4} />
-              <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.prep_time}m</Text>
+              <Text style={[styles.statText, isDark && styles.statTextDark]}>{recipe.prep_time}m</Text>
             </View>
             {showCalories ? (
-              <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
+              <View style={[styles.statItem, isDark && styles.statItemDark]}>
                 <Flame size={12} color={COLORS.accent} strokeWidth={2.4} />
-                <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.calories} kcal</Text>
+                <Text style={[styles.statText, isDark && styles.statTextDark]}>{recipe.calories} kcal</Text>
               </View>
             ) : null}
-            <View style={[styles.statItem, isDark && { backgroundColor: COLORS.white + '10', borderColor: COLORS.white + '26' }]}>
+            <View style={[styles.statItem, isDark && styles.statItemDark]}>
               <ChefHat size={12} color={COLORS.primary} strokeWidth={2.4} />
-              <Text style={[styles.statText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.appliance_needed}</Text>
+              <Text style={[styles.statText, isDark && styles.statTextDark]}>{recipe.appliance_needed}</Text>
             </View>
           </View>
         </View>
@@ -117,6 +117,11 @@ const FavoriteRecipesScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedAppliance, setSelectedAppliance] = useState<string>('TODOS');
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string>('TODOS');
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState('');
+  const [dialogMessage, setDialogMessage] = useState('');
+  const [dialogVariant, setDialogVariant] = useState<'info' | 'warning' | 'danger'>('info');
+  const [dialogActions, setDialogActions] = useState<AppDialogAction[]>([]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
@@ -211,20 +216,42 @@ const FavoriteRecipesScreen: React.FC = () => {
   };
 
   const handleDeleteFavorite = (favoriteId: string, recipeTitle: string) => {
+    const closeDialog = () => setDialogVisible(false);
+    const showDialog = (params: {
+      title: string;
+      message: string;
+      variant?: 'info' | 'warning' | 'danger';
+      actions?: AppDialogAction[];
+    }) => {
+      setDialogTitle(params.title);
+      setDialogMessage(params.message);
+      setDialogVariant(params.variant || 'info');
+      setDialogActions(
+        params.actions || [{ label: 'Entendido', tone: 'primary', onPress: closeDialog }],
+      );
+      setDialogVisible(true);
+    };
+
     if (!isOnline) {
-      Alert.alert('Sin conexión', 'Sin internet solo podes consultar favoritos guardados localmente.');
+      showDialog({
+        title: 'Sin conexion',
+        message: 'Sin internet solo podes consultar favoritos guardados localmente.',
+        variant: 'warning',
+      });
       return;
     }
 
-    Alert.alert(
-      'Quitar de favoritos',
-      `Vas a quitar "${recipeTitle}" de tu lista.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
+    showDialog({
+      title: 'Quitar de favoritos',
+      message: `Vas a quitar "${recipeTitle}" de tu lista.`,
+      variant: 'warning',
+      actions: [
+        { label: 'Cancelar', tone: 'secondary', onPress: closeDialog },
         {
-          text: 'Quitar',
-          style: 'destructive',
+          label: 'Quitar',
+          tone: 'danger',
           onPress: async () => {
+            closeDialog();
             const previousFavorites = favorites;
             setFavorites((prev) => prev.filter((item) => item.id !== favoriteId));
             try {
@@ -235,14 +262,14 @@ const FavoriteRecipesScreen: React.FC = () => {
                 e?.response?.data?.message ||
                 e?.message ||
                 'No se pudo quitar la receta de favoritos.';
-              Alert.alert('Ups', message);
+              showDialog({ title: 'Ups', message, variant: 'danger' });
             } finally {
               fetchFavorites(false);
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   if (loading) {
@@ -441,6 +468,14 @@ const FavoriteRecipesScreen: React.FC = () => {
           }
         />
       </Animated.View>
+      <AppDialog
+        visible={dialogVisible}
+        title={dialogTitle}
+        message={dialogMessage}
+        variant={dialogVariant}
+        actions={dialogActions}
+        onClose={() => setDialogVisible(false)}
+      />
     </View>
   );
 };
@@ -737,6 +772,10 @@ const styles = StyleSheet.create({
     borderColor: '#D7E9DD',
     ...SHADOW_SM,
   },
+  recipeCardDark: {
+    backgroundColor: '#11351A',
+    borderColor: COLORS.secondary + '55',
+  },
   bookmarkBadgeInline: {
     width: 30,
     height: 30,
@@ -756,6 +795,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#E05A5A',
     borderWidth: 1,
     borderColor: '#F9C3C3',
+  },
+  removeBadgeInlineDark: {
+    backgroundColor: '#8F2F2F',
+    borderColor: '#C95E5E',
   },
   recipeInfo: {
     paddingTop: 12,
@@ -797,6 +840,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     lineHeight: 17,
   },
+  recipeDescDark: {
+    color: COLORS.white,
+    opacity: 0.78,
+  },
   recipeStats: {
     flexDirection: 'row',
     gap: 8,
@@ -813,11 +860,19 @@ const styles = StyleSheet.create({
     borderColor: '#E2EFE7',
     gap: 4,
   },
+  statItemDark: {
+    backgroundColor: COLORS.white + '10',
+    borderColor: COLORS.white + '26',
+  },
   statText: {
     fontSize: 12,
     fontWeight: '700',
     color: DARK_GREEN,
     opacity: 0.8,
+  },
+  statTextDark: {
+    color: COLORS.white,
+    opacity: 0.9,
   },
 });
 

@@ -6,6 +6,7 @@ export enum ItemStatus {
 
 export interface FridgeItem {
   id: string;
+  productId?: string;
   quantity: number;        
   expirationDate: string;  
   status: ItemStatus;

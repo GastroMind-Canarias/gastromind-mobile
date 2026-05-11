@@ -56,9 +56,12 @@ const AIChatScreen: React.FC = () => {
   const { isOnline } = useNetwork();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
+  const [isConsumingIngredients, setIsConsumingIngredients] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<SuggestionResponse | null>(null);
+  const [favoriteAddedSuggestionId, setFavoriteAddedSuggestionId] = useState<string | null>(null);
+  const [consumedSuggestionId, setConsumedSuggestionId] = useState<string | null>(null);
   const [servingsInput, setServingsInput] = useState('2');
 
   const requestSuggestion = async () => {
@@ -85,6 +88,8 @@ const AIChatScreen: React.FC = () => {
       );
 
       setSuggestion(response.data);
+      setFavoriteAddedSuggestionId(null);
+      setConsumedSuggestionId(null);
     } catch (e: any) {
       console.error('[AIChat][Suggestion][Error]', {
         url: e?.config?.url,
@@ -117,6 +122,11 @@ const AIChatScreen: React.FC = () => {
       return;
     }
 
+    if (favoriteAddedSuggestionId === suggestionId) {
+      setSuccess('Ya esta en favoritos.');
+      return;
+    }
+
     setIsSavingFavorite(true);
     setError(null);
     setSuccess(null);
@@ -136,8 +146,14 @@ const AIChatScreen: React.FC = () => {
         }
       }
 
+      setFavoriteAddedSuggestionId(suggestionId);
       setSuccess('Receta anadida a favoritos.');
     } catch (e: any) {
+      if (e?.response?.status === 409) {
+        setFavoriteAddedSuggestionId(suggestionId);
+        setSuccess('Ya esta en favoritos.');
+        return;
+      }
       const message =
         e?.response?.data?.message ||
         e?.message ||
@@ -145,6 +161,76 @@ const AIChatScreen: React.FC = () => {
       setError(message);
     } finally {
       setIsSavingFavorite(false);
+    }
+  };
+
+  const consumeIngredientsFromSuggestion = async () => {
+    if (!isOnline) {
+      setError('Sin internet no se pueden descontar ingredientes ahora mismo.');
+      return;
+    }
+
+    const ingredients = suggestion?.recipe?.ingredientsUsed || [];
+    if (!ingredients.length) {
+      setError('No hay ingredientes para descontar en esta receta.');
+      return;
+    }
+
+    setIsConsumingIngredients(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const endpoint = '/fridge-items/me/consume-from-recipe';
+      const ingredientsUsed = ingredients
+        .map((ingredient) => ({
+          productId: String(ingredient.productId || '').trim(),
+          productName: String(ingredient.productName || '').trim(),
+          quantityUsed: Number(ingredient.quantityUsed),
+        }))
+        .filter((ingredient) => Boolean(ingredient.productId) && Number.isFinite(ingredient.quantityUsed) && ingredient.quantityUsed > 0);
+
+      if (!ingredientsUsed.length) {
+        throw new Error('No hay ingredientesUsed validos para consumir.');
+      }
+
+      const payload = { ingredientsUsed };
+
+      console.log('[AIChat][ConsumeRecipe][Request]', {
+        method: 'put',
+        endpoint,
+        baseURL: apiClient.defaults.baseURL,
+        fullUrl: `${apiClient.defaults.baseURL || ''}${endpoint}`,
+        payload,
+      });
+
+      await apiClient.put(endpoint, payload);
+
+      console.log('[AIChat][ConsumeRecipe][Success]', {
+        method: 'put',
+        endpoint,
+        payload,
+      });
+
+      const consumedId = getSuggestionId(suggestion);
+      if (consumedId) setConsumedSuggestionId(consumedId);
+      setSuccess('Ingredientes descontados de la nevera.');
+    } catch (e: any) {
+      console.error('[AIChat][ConsumeRecipe][Error]', {
+        message: e?.message,
+        status: e?.response?.status,
+        responseData: e?.response?.data,
+        endpoint: e?.config?.url,
+        method: e?.config?.method,
+        requestData: e?.config?.data,
+      });
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        'No se pudieron descontar los ingredientes.';
+      setError(message);
+    } finally {
+      setIsConsumingIngredients(false);
     }
   };
 
@@ -256,8 +342,8 @@ const AIChatScreen: React.FC = () => {
         ) : null}
 
         {suggestion ? (
-          <View style={[styles.recipeCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}>
-            <View style={[styles.recipeHero, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
+          <View style={[styles.recipeCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '66' }]}> 
+            <View style={[styles.recipeHero, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}> 
               <View style={styles.recipeHeroHeader}>
                 <Text style={styles.recipeBadge}>{suggestion.recipe.difficulty}</Text>
                 <View style={styles.scorePill}>
@@ -278,6 +364,54 @@ const AIChatScreen: React.FC = () => {
               </View>
             </View>
 
+            <View style={styles.actionsRowTop}>
+              <TouchableOpacity
+                style={[
+                  styles.consumeButton,
+                  (isConsumingIngredients || consumedSuggestionId === getSuggestionId(suggestion)) && styles.buttonDisabled,
+                  consumedSuggestionId === getSuggestionId(suggestion) && styles.consumeButtonDone,
+                ]}
+                onPress={consumeIngredientsFromSuggestion}
+                activeOpacity={0.86}
+                disabled={isConsumingIngredients || !isOnline || consumedSuggestionId === getSuggestionId(suggestion)}
+                accessibilityState={{ disabled: isConsumingIngredients || !isOnline || consumedSuggestionId === getSuggestionId(suggestion) }}
+              >
+                {isConsumingIngredients ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <ChefHat size={14} color={COLORS.white} strokeWidth={2.4} />
+                    <Text style={styles.favoriteButtonText}>
+                      {consumedSuggestionId === getSuggestionId(suggestion) ? 'Ingredientes consumidos' : 'Consumir ingredientes'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.favoriteButton,
+                  (isSavingFavorite || favoriteAddedSuggestionId === getSuggestionId(suggestion)) && styles.buttonDisabled,
+                  favoriteAddedSuggestionId === getSuggestionId(suggestion) && styles.favoriteButtonDone,
+                ]}
+                onPress={addRecipeToFavorites}
+                activeOpacity={0.86}
+                disabled={isSavingFavorite || !isOnline || favoriteAddedSuggestionId === getSuggestionId(suggestion)}
+                accessibilityState={{ disabled: isSavingFavorite || !isOnline || favoriteAddedSuggestionId === getSuggestionId(suggestion) }}
+              >
+                {isSavingFavorite ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <Heart size={14} color={COLORS.white} fill={COLORS.white} strokeWidth={2.4} />
+                    <Text style={styles.favoriteButtonText}>
+                      {favoriteAddedSuggestionId === getSuggestionId(suggestion) ? 'Ya en favoritos' : 'Anadir a favoritos'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
             <Text style={[styles.recipeInstructions, isDark && { color: COLORS.white, opacity: 0.86 }]}>{suggestion.recipe.instructions}</Text>
 
             <View style={[styles.ingredientsPanel, isDark && { backgroundColor: '#1A2E1F', borderColor: colors.secondary + '66' }]}>
@@ -296,22 +430,6 @@ const AIChatScreen: React.FC = () => {
               )}
             </View>
 
-            <TouchableOpacity
-              style={[styles.favoriteButton, isSavingFavorite && styles.buttonDisabled]}
-              onPress={addRecipeToFavorites}
-              activeOpacity={0.86}
-              disabled={isSavingFavorite || !isOnline}
-              accessibilityState={{ disabled: isSavingFavorite || !isOnline }}
-            >
-              {isSavingFavorite ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <>
-                  <Heart size={14} color={COLORS.white} fill={COLORS.white} strokeWidth={2.4} />
-                  <Text style={styles.favoriteButtonText}>Anadir a favoritos</Text>
-                </>
-              )}
-            </TouchableOpacity>
           </View>
         ) : null}
       </ScrollView>
@@ -592,19 +710,52 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   favoriteButton: {
-    marginTop: 12,
+    marginTop: 0,
     backgroundColor: DARK,
     borderRadius: 12,
     paddingVertical: 12,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
+    flex: 1,
+    minHeight: 46,
+  },
+  consumeButton: {
+    marginTop: 0,
+    backgroundColor: '#1E7A4E',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    flex: 1,
+    minHeight: 46,
   },
   favoriteButtonText: {
     color: COLORS.white,
     fontSize: 14,
     fontWeight: '800',
+    textAlign: 'center',
+    flexShrink: 1,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionsRowTop: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  favoriteButtonDone: {
+    backgroundColor: '#2C5A45',
+  },
+  consumeButtonDone: {
+    backgroundColor: '#2F6F57',
   },
 });
 

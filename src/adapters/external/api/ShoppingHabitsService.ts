@@ -10,6 +10,11 @@ export interface HabitualItemStatus {
   currentQuantity: number;
   missingQuantity: number;
   hasEnough: boolean;
+  quantityUnit?: string;
+  score?: number;
+  lowStock?: boolean;
+  distinctTicketCount?: number;
+  lastPurchasedAt?: string;
 }
 
 export interface ShoppingHabitsSummary {
@@ -34,6 +39,18 @@ type Ticket = {
   purchaseDate: string;
 };
 
+type UsualPurchaseSuggestion = {
+  productId: string;
+  productName: string;
+  targetQuantity: number;
+  quantityUnit: string;
+  currentFridgeQuantity: number;
+  score: number;
+  distinctTicketCount: number;
+  lastPurchasedAt: string;
+  lowStock: boolean;
+};
+
 const asString = (value: unknown, fallback = ''): string => {
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
@@ -47,6 +64,16 @@ const asNumber = (value: unknown, fallback = 0): number => {
     if (Number.isFinite(parsed)) return parsed;
   }
   return fallback;
+};
+
+const toCapitalizedWords = (value: string): string => {
+  return value
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 };
 
 const extractList = (payload: any): any[] => {
@@ -166,6 +193,35 @@ const loadStoreNames = async (): Promise<Record<string, string>> => {
   }
 };
 
+const normalizeUsualPurchaseSuggestion = (item: any): UsualPurchaseSuggestion | null => {
+  if (!item) return null;
+  const productId = asString(item.productId || item.product_id);
+  if (!productId) return null;
+
+  return {
+    productId,
+    productName: toCapitalizedWords(asString(item.productName || item.product_name, productId)),
+    targetQuantity: asNumber(item.targetQuantity ?? item.target_quantity, 0),
+    quantityUnit: asString(item.quantityUnit || item.quantity_unit, ''),
+    currentFridgeQuantity: asNumber(item.currentFridgeQuantity ?? item.current_fridge_quantity, 0),
+    score: asNumber(item.score, 0),
+    distinctTicketCount: asNumber(item.distinctTicketCount ?? item.distinct_ticket_count, 0),
+    lastPurchasedAt: asString(item.lastPurchasedAt || item.last_purchased_at, ''),
+    lowStock: Boolean(item.lowStock ?? item.low_stock),
+  };
+};
+
+const loadUsualPurchaseSuggestions = async (): Promise<UsualPurchaseSuggestion[]> => {
+  try {
+    const response = await apiClient.get('/usual-purchases/me/suggestions');
+    return extractList(response.data)
+      .map((item) => normalizeUsualPurchaseSuggestion(item))
+      .filter((item): item is UsualPurchaseSuggestion => Boolean(item));
+  } catch {
+    return [];
+  }
+};
+
 export const shoppingHabitsService = {
   getSummary: async (): Promise<ShoppingHabitsSummary> => {
     const empty: ShoppingHabitsSummary = {
@@ -178,8 +234,9 @@ export const shoppingHabitsService = {
     const userId = await profileService.getUserId();
     if (!userId) return empty;
 
-    const [usualPurchases, fridgeItems, productNameById, tickets, storeNameById] = await Promise.all([
+    const [usualPurchases, suggestions, fridgeItems, productNameById, tickets, storeNameById] = await Promise.all([
       loadUsualPurchases(userId),
+      loadUsualPurchaseSuggestions(),
       fridgeService.getAll(),
       loadProductNames(),
       loadTickets(userId),
@@ -193,9 +250,9 @@ export const shoppingHabitsService = {
       fridgeByProduct.set(key, current + asNumber(item.quantity, 0));
     });
 
-    const habitualItems: HabitualItemStatus[] = usualPurchases
+    const habitualItemsFromUsualPurchases: HabitualItemStatus[] = usualPurchases
       .map((purchase) => {
-        const productName = productNameById[purchase.productId] || purchase.productId;
+        const productName = toCapitalizedWords(productNameById[purchase.productId] || purchase.productId);
         const normalizedName = productName.trim().toLowerCase();
         const currentQuantity = fridgeByProduct.get(normalizedName) || 0;
         const target = Math.max(0, purchase.targetQuantity);
@@ -217,6 +274,39 @@ export const shoppingHabitsService = {
         }
         return b.missingQuantity - a.missingQuantity;
       });
+
+    const habitualItemsFromSuggestions: HabitualItemStatus[] = suggestions
+      .map((suggestion) => {
+        const target = Math.max(0, suggestion.targetQuantity);
+        const currentQuantity = Math.max(0, suggestion.currentFridgeQuantity);
+        const missing = Math.max(0, target - currentQuantity);
+
+        return {
+          id: suggestion.productId,
+          productId: suggestion.productId,
+          productName: suggestion.productName,
+          targetQuantity: target,
+          currentQuantity,
+          missingQuantity: missing,
+          hasEnough: !suggestion.lowStock && missing <= 0,
+          quantityUnit: suggestion.quantityUnit,
+          score: suggestion.score,
+          lowStock: suggestion.lowStock,
+          distinctTicketCount: suggestion.distinctTicketCount,
+          lastPurchasedAt: suggestion.lastPurchasedAt,
+        };
+      })
+      .sort((a, b) => {
+        if ((a.lowStock ?? false) !== (b.lowStock ?? false)) {
+          return (a.lowStock ?? false) ? -1 : 1;
+        }
+        return (b.score ?? 0) - (a.score ?? 0);
+      });
+
+    const habitualItems =
+      habitualItemsFromSuggestions.length > 0
+        ? habitualItemsFromSuggestions
+        : habitualItemsFromUsualPurchases;
 
     const now = new Date();
     const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;

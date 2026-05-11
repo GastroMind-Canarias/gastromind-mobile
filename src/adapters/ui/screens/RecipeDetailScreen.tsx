@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import {
-  Alert,
+  ActivityIndicator,
   Animated,
   Easing,
   Platform,
@@ -18,6 +18,9 @@ import { Recipe } from '../../../core/domain/recipe.types';
 import { COLORS } from '../../../shared/theme/colors';
 import { useTheme } from '../../../shared/theme/ThemeProvider';
 import { favoriteService } from '../../external/api/FavoriteService';
+import { apiClient } from '../../external/api/apiClient';
+import { useNetwork } from '../../../shared/network/NetworkProvider';
+import { AppDialog, type AppDialogAction } from '../components/AppDialog';
 
 // ─── Constantes de tema ─────────────────────
 const DARK_GREEN = '#0D1F17';
@@ -25,6 +28,7 @@ const DARK_GREEN = '#0D1F17';
 const RecipeDetailScreen: React.FC = () => {
   const router = useRouter();
   const { isDark, colors } = useTheme();
+  const { isOnline } = useNetwork();
   const { recipe: recipeParam } = useLocalSearchParams<{ recipe: string }>();
 
   const recipe = useMemo((): Recipe | null => {
@@ -42,6 +46,26 @@ const RecipeDetailScreen: React.FC = () => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteId, setFavoriteId] = useState<string | null>(null);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [consumeLoading, setConsumeLoading] = useState(false);
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState('');
+  const [dialogMessage, setDialogMessage] = useState('');
+  const [dialogVariant, setDialogVariant] = useState<'info' | 'warning' | 'danger' | 'success'>('info');
+  const [dialogActions, setDialogActions] = useState<AppDialogAction[]>([]);
+
+  const closeDialog = () => setDialogVisible(false);
+  const showDialog = useCallback((params: {
+    title: string;
+    message: string;
+    variant?: 'info' | 'warning' | 'danger' | 'success';
+    actions?: AppDialogAction[];
+  }) => {
+    setDialogTitle(params.title);
+    setDialogMessage(params.message);
+    setDialogVariant(params.variant || 'info');
+    setDialogActions(params.actions || [{ label: 'Entendido', tone: 'primary', onPress: closeDialog }]);
+    setDialogVisible(true);
+  }, []);
 
   const syncFavoriteState = useCallback(async () => {
     if (!recipe) return;
@@ -87,9 +111,68 @@ const RecipeDetailScreen: React.FC = () => {
         e?.response?.data?.message ||
         e?.message ||
         'No se pudo actualizar favoritos.';
-      Alert.alert('Ups', message);
+      showDialog({ title: 'Ups', message, variant: 'danger' });
     } finally {
       setFavoriteLoading(false);
+    }
+  };
+
+  const handleConsumeIngredients = async () => {
+    if (!recipe || consumeLoading) return;
+    if (!isOnline) {
+      showDialog({ title: 'Sin conexion', message: 'Necesitas internet para descontar ingredientes.', variant: 'warning' });
+      return;
+    }
+
+    const ingredientsUsed = (recipe.ingredientsUsed || [])
+      .map((ingredient) => ({
+        productId: String(ingredient.productId || '').trim(),
+        productName: String(ingredient.productName || '').trim(),
+        quantityUsed: Number(ingredient.quantityUsed),
+      }))
+      .filter((ingredient) => Boolean(ingredient.productId) && Number.isFinite(ingredient.quantityUsed) && ingredient.quantityUsed > 0);
+
+    if (!ingredientsUsed.length) {
+      showDialog({ title: 'Sin datos', message: 'No hay productos usados validos para consumir.', variant: 'warning' });
+      return;
+    }
+
+    const endpoint = '/fridge-items/me/consume-from-recipe';
+    const payload = { ingredientsUsed };
+
+    setConsumeLoading(true);
+    try {
+      console.log('[RecipeDetail][ConsumeRecipe][Request]', {
+        method: 'put',
+        endpoint,
+        baseURL: apiClient.defaults.baseURL,
+        fullUrl: `${apiClient.defaults.baseURL || ''}${endpoint}`,
+        payload,
+      });
+
+      await apiClient.put(endpoint, payload);
+
+      console.log('[RecipeDetail][ConsumeRecipe][Success]', {
+        method: 'put',
+        endpoint,
+        payload,
+      });
+      showDialog({ title: 'Listo', message: 'Ingredientes descontados de la nevera.', variant: 'success' });
+    } catch (error: any) {
+      console.error('[RecipeDetail][ConsumeRecipe][Error]', {
+        method: error?.config?.method,
+        endpoint: error?.config?.url,
+        status: error?.response?.status,
+        responseData: error?.response?.data,
+        message: error?.message,
+      });
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'No se pudieron descontar los ingredientes.';
+      showDialog({ title: 'Ups', message, variant: 'danger' });
+    } finally {
+      setConsumeLoading(false);
     }
   };
 
@@ -172,11 +255,51 @@ const RecipeDetailScreen: React.FC = () => {
             <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + '24' }]} />
           </View>
 
-          <View style={[styles.instructionsCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '45' }]}>
+          <View style={[styles.instructionsCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '45' }]}> 
             <Text style={[styles.instructionText, isDark && { color: COLORS.white, opacity: 0.9 }]}>{recipe.instructions}</Text>
           </View>
+
+          <View style={styles.sectionHeader}>
+            <ChefHat size={14} color={isDark ? COLORS.white : DARK_GREEN} strokeWidth={2.5} />
+            <Text style={[styles.sectionTitle, isDark && { color: COLORS.white, opacity: 0.82 }]}>Productos usados</Text>
+            <View style={[styles.sectionLine, isDark && { backgroundColor: COLORS.white + '24' }]} />
+          </View>
+
+          <View style={[styles.instructionsCard, isDark && { backgroundColor: '#11351A', borderColor: colors.secondary + '45' }]}> 
+            {(recipe.ingredientsUsed || []).length > 0 ? (
+              recipe.ingredientsUsed?.map((ingredient) => (
+                <View key={`${ingredient.itemId || ingredient.productId}-${ingredient.productName}`} style={[styles.usedIngredientRow, isDark && { borderBottomColor: COLORS.white + '26' }]}>
+                  <Text style={[styles.usedIngredientName, isDark && { color: COLORS.white }]}>{ingredient.productName}</Text>
+                  <Text style={styles.usedIngredientQty}>{ingredient.quantityUsed}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.instructionText, isDark && { color: COLORS.white, opacity: 0.82 }]}>No hay productos usados en esta receta favorita.</Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.consumeButton, (consumeLoading || (recipe.ingredientsUsed || []).length === 0) && styles.bookmarkButtonDisabled]}
+            onPress={handleConsumeIngredients}
+            disabled={consumeLoading || (recipe.ingredientsUsed || []).length === 0}
+            activeOpacity={0.9}
+          >
+            {consumeLoading ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <Text style={styles.consumeButtonText}>Consumir ingredientes</Text>
+            )}
+          </TouchableOpacity>
         </Animated.View>
       </ScrollView>
+      <AppDialog
+        visible={dialogVisible}
+        title={dialogTitle}
+        message={dialogMessage}
+        variant={dialogVariant}
+        actions={dialogActions}
+        onClose={closeDialog}
+      />
     </View>
   );
 };
@@ -394,6 +517,40 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: DARK_GREEN,
     opacity: 0.84,
+  },
+  usedIngredientRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DCEBE2',
+  },
+  usedIngredientName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: DARK_GREEN,
+    marginRight: 10,
+  },
+  usedIngredientQty: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  consumeButton: {
+    marginTop: 6,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW_SM,
+  },
+  consumeButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '800',
   },
 });
 

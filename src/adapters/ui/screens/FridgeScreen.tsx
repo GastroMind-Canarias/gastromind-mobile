@@ -599,9 +599,11 @@ function ItemFormModal({
               label="Nombre"
               value={productName}
               onChangeText={setProductName}
+              editable={!editingId}
               placeholder="Ej. Leche entera"
               isDark={isDark}
               accessibilityLabel="Nombre del producto"
+              inputWrapStyle={editingId ? [styles.inputReadonly, isDark && styles.inputReadonlyDark] : undefined}
             />
 
             <AppField
@@ -819,7 +821,9 @@ export default function FridgeApp() {
     const parsedQty = parseFloat(quantity);
     const validQty = (isNaN(parsedQty) || parsedQty <= 0) ? 1 : parsedQty;
     const normalizedProductName = toCapitalizedWords(productName);
+    const editingItem = editingId ? items.find((item) => item.id === editingId) : undefined;
     const data = {
+      productId: editingItem?.productId,
       product: normalizedProductName,
       quantity: validQty,
       expirationDate: expDate,
@@ -1670,6 +1674,12 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 11, fontWeight: '700', color: COLORS.text,
     opacity: 0.5, marginBottom: 7, letterSpacing: 0.8, textTransform: 'uppercase',
+  },
+  inputReadonly: {
+    opacity: 0.62,
+  },
+  inputReadonlyDark: {
+    opacity: 0.72,
   },
   statusRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   statusOpt: {

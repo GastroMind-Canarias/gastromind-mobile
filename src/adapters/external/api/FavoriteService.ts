@@ -133,17 +133,29 @@ const hydrateFavoriteWithRecipeDetail = async (item: any): Promise<UserFavorite 
 
   try {
     const recipeResponse = await apiClient.get(`/recipes/${recipeId}`);
+    const favoriteRecipeSource = extractRecipeSource(workingItem);
+    const mergedRecipe = {
+      ...(typeof recipeResponse.data === 'object' ? recipeResponse.data : {}),
+      ingredientsUsed:
+        (favoriteRecipeSource && Array.isArray(favoriteRecipeSource.ingredientsUsed)
+          ? favoriteRecipeSource.ingredientsUsed
+          : undefined) ||
+        (recipeResponse.data && Array.isArray((recipeResponse.data as any).ingredientsUsed)
+          ? (recipeResponse.data as any).ingredientsUsed
+          : undefined),
+    };
+
     if (typeof workingItem === 'string') {
       return normalizeFavorite({
         id: favoriteId || recipeId,
-        recipe: recipeResponse.data,
+        recipe: mergedRecipe,
       });
     }
 
     return normalizeFavorite({
       ...(typeof workingItem === 'object' ? workingItem : {}),
       id: favoriteId || workingItem?.id,
-      recipe: recipeResponse.data,
+      recipe: mergedRecipe,
     });
   } catch {
     return normalizeFavorite(workingItem);
@@ -206,6 +218,21 @@ const mapRecipe = (source: any): Recipe => {
       source?.createdAt,
       source?.date,
     ),
+    ingredientsUsed: Array.isArray(source?.ingredientsUsed)
+      ? source.ingredientsUsed
+          .map((ingredient: any) => {
+            const productId = pickText('', ingredient?.productId, ingredient?.product_id, ingredient?.itemId, ingredient?.item_id);
+            if (!productId) return null;
+            return {
+              itemId: pickText('', ingredient?.itemId, ingredient?.item_id, ingredient?.productId, ingredient?.product_id),
+              productId,
+              productName: pickText('Producto', ingredient?.productName, ingredient?.product_name, ingredient?.name),
+              quantityUsed: pickFiniteNumber(0, ingredient?.quantityUsed, ingredient?.quantity_used),
+              quantityAvailable: pickFiniteNumber(0, ingredient?.quantityAvailable, ingredient?.quantity_available),
+            };
+          })
+          .filter(Boolean)
+      : [],
   };
 };
 

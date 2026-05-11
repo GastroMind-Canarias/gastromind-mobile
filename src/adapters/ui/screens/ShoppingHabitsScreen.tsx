@@ -40,12 +40,41 @@ const qty = (value: number): string => {
   return value.toFixed(1);
 };
 
+const formatDateTime = (value?: string): string => {
+  if (!value) return 'Sin fecha';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
 function HabitItemCard({ item, isDark }: { item: HabitualItemStatus; isDark: boolean }) {
+  const target = Math.max(0, item.targetQuantity);
+  const current = Math.max(0, item.currentQuantity);
+  const coverage = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 100;
+
   return (
-    <View style={[styles.itemCard, isDark && { backgroundColor: '#11351A', borderColor: COLORS.secondary + '66' }]}>
+    <View
+      style={[
+        styles.itemRow,
+        item.hasEnough ? styles.itemRowOk : styles.itemRowLow,
+        isDark && (item.hasEnough ? styles.itemRowOkDark : styles.itemRowLowDark),
+      ]}
+    >
+      <View style={[styles.itemAccent, item.hasEnough ? styles.itemAccentOk : styles.itemAccentLow]} />
+
       <View style={styles.itemTop}>
         <Text style={[styles.itemName, isDark && { color: COLORS.white }]}>{item.productName}</Text>
-        <View style={[styles.badge, item.hasEnough ? styles.badgeOk : styles.badgeMissing]}>
+        <View
+          style={[
+            styles.badge,
+            item.hasEnough ? styles.badgeOk : styles.badgeMissing,
+            isDark && (item.hasEnough ? styles.badgeOkDark : styles.badgeMissingDark),
+          ]}
+        >
           {item.hasEnough ? (
             <CheckCircle2 size={12} color={COLORS.primary} strokeWidth={2.8} />
           ) : (
@@ -57,10 +86,37 @@ function HabitItemCard({ item, isDark }: { item: HabitualItemStatus; isDark: boo
         </View>
       </View>
 
-      <View style={styles.itemMetaRow}>
-        <Text style={[styles.itemMeta, isDark && { color: COLORS.white, opacity: 0.8 }]}>Habitual: {qty(item.targetQuantity)}</Text>
-        <Text style={[styles.itemMeta, isDark && { color: COLORS.white, opacity: 0.8 }]}>En nevera: {qty(item.currentQuantity)}</Text>
+      <View style={styles.kpiRow}>
+        <View style={[styles.kpiBox, isDark && { backgroundColor: COLORS.white + '12', borderColor: COLORS.white + '22' }]}>
+          <Text style={[styles.kpiLabel, isDark && { color: COLORS.white, opacity: 0.74 }]}>Objetivo</Text>
+          <Text style={[styles.kpiValue, isDark && { color: COLORS.white }]}>{qty(item.targetQuantity)} {item.quantityUnit || ''}</Text>
+        </View>
+        <View style={[styles.kpiBox, isDark && { backgroundColor: COLORS.white + '12', borderColor: COLORS.white + '22' }]}>
+          <Text style={[styles.kpiLabel, isDark && { color: COLORS.white, opacity: 0.74 }]}>Nevera</Text>
+          <Text style={[styles.kpiValue, isDark && { color: COLORS.white }]}>{qty(item.currentQuantity)} {item.quantityUnit || ''}</Text>
+        </View>
       </View>
+
+      <View style={[styles.itemProgressTrack, isDark && { backgroundColor: COLORS.white + '16' }]}> 
+        <View
+          style={[
+            styles.itemProgressFill,
+            { width: `${coverage}%` },
+            item.hasEnough ? styles.itemProgressFillOk : styles.itemProgressFillLow,
+          ]}
+        />
+      </View>
+
+      <View style={styles.itemMetaRow}>
+        <Text style={[styles.itemMetaTag, isDark && { backgroundColor: COLORS.white + '14', borderColor: COLORS.white + '22', color: COLORS.white }]}>Score {qty(item.score || 0)}</Text>
+        <Text style={[styles.itemMetaTagStrong, isDark && { color: COLORS.white }]}>Cobertura {coverage}%</Text>
+      </View>
+      {(item.lastPurchasedAt || item.score || item.distinctTicketCount) ? (
+        <View style={styles.itemMetaRow}>
+          <Text style={[styles.itemMeta, isDark && { color: COLORS.white, opacity: 0.72 }]}>Ult. compra: {formatDateTime(item.lastPurchasedAt)}</Text>
+          <Text style={[styles.itemMeta, isDark && { color: COLORS.white, opacity: 0.72 }]}>Tickets: {item.distinctTicketCount || 0}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -325,7 +381,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
     gap: 12,
   },
   metricsRow: {
@@ -468,6 +524,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     padding: 12,
   },
+  itemRow: {
+    position: 'relative',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DDECE2',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  itemRowOk: {
+    backgroundColor: '#F7FCF8',
+  },
+  itemRowLow: {
+    backgroundColor: '#FFF8F8',
+  },
+  itemRowOkDark: {
+    backgroundColor: '#11351A',
+    borderColor: COLORS.secondary + '66',
+  },
+  itemRowLowDark: {
+    backgroundColor: '#2A1717',
+    borderColor: '#7A3F3F',
+  },
+  itemAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 5,
+  },
+  itemAccentOk: {
+    backgroundColor: '#27B05A',
+  },
+  itemAccentLow: {
+    backgroundColor: '#E45555',
+  },
   itemTop: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -493,9 +587,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#E9F8EE',
     borderColor: '#B7E8C5',
   },
+  badgeOkDark: {
+    backgroundColor: '#1E4A33',
+    borderColor: '#2F8A5A',
+  },
   badgeMissing: {
     backgroundColor: '#FFF0F0',
     borderColor: '#F8CACA',
+  },
+  badgeMissingDark: {
+    backgroundColor: '#4A2222',
+    borderColor: '#A14A4A',
   },
   badgeText: {
     fontSize: 11,
@@ -518,6 +620,71 @@ const styles = StyleSheet.create({
     opacity: 0.72,
     fontSize: 12,
     fontWeight: '600',
+  },
+  itemMetaTag: {
+    color: COLORS.text,
+    fontSize: 11,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: '#DCECE1',
+    backgroundColor: '#F5FAF7',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  itemMetaTagStrong: {
+    color: DARK,
+    fontSize: 11,
+    fontWeight: '900',
+    marginLeft: 'auto',
+    alignSelf: 'center',
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  kpiBox: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DDECE2',
+    backgroundColor: '#F6FBF8',
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+  },
+  kpiLabel: {
+    color: COLORS.text,
+    opacity: 0.62,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  kpiValue: {
+    color: DARK,
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  itemProgressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#E8F4EC',
+    overflow: 'hidden',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  itemProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  itemProgressFillOk: {
+    backgroundColor: '#27B05A',
+  },
+  itemProgressFillLow: {
+    backgroundColor: '#E45555',
   },
   errorText: {
     color: COLORS.error,

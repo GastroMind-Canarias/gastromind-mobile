@@ -18,6 +18,7 @@ interface AppFieldProps {
   inputWrapStyle?: StyleProp<ViewStyle>;
   inputStyle?: TextInputProps['style'];
   placeholderTextColor?: string;
+  editable?: boolean;
 }
 
 export default function AppField({
@@ -36,6 +37,7 @@ export default function AppField({
   inputWrapStyle,
   inputStyle,
   placeholderTextColor,
+  editable = true,
 }: AppFieldProps) {
   return (
     <View style={wrapperStyle}>
@@ -47,6 +49,7 @@ export default function AppField({
           style={[styles.input, isDark && styles.inputDark, inputStyle]}
           value={value}
           onChangeText={onChangeText}
+          editable={editable}
           placeholder={placeholder}
           placeholderTextColor={placeholderTextColor ?? (isDark ? COLORS.white + '66' : COLORS.text + '44')}
           keyboardType={keyboardType}
