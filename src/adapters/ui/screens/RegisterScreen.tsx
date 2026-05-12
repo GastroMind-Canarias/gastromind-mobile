@@ -2,6 +2,7 @@ import { Airplay, ArrowLeft, ArrowRight, Check, ChefHat, Cpu, Flame, House, Link
 import { router } from 'expo-router';
 import { ROUTES } from '../navigation/routes';
 import React, { useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     ActivityIndicator,
     Alert,
@@ -21,6 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../../shared/theme/colors';
 import { apiClient } from '../../external/api/apiClient';
+import { profileService } from '../../external/api/ProfileService';
 import { CustomButton } from '../components/CustomButton';
 import { CustomInput } from '../components/CustomInput';
 import { useAuth } from '../hooks/useAuth';
@@ -61,6 +63,17 @@ const ALLERGEN_ICONS: Record<string, LucideIcon> = {
   MOLUSCOS: ShieldAlert,
   SULFITOS: ShieldAlert,
 };
+
+const toReadableAllergenName = (value: string): string => {
+  const normalized = value.replace(/_/g, ' ').toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const FALLBACK_ALLERGEN_OPTIONS: AllergenOption[] = Object.keys(ALLERGEN_ICONS).map((key) => ({
+  id: key,
+  name: toReadableAllergenName(key),
+  icon: ALLERGEN_ICONS[key],
+}));
 
 const APPLIANCE_ICONS: Record<string, LucideIcon> = {
   HORNO: Flame,
@@ -193,6 +206,7 @@ const RegisterScreen: React.FC = () => {
   const [selectedAllergens, setSelectedAllergens] = useState<string[]>([]);
   const [selectedAppliances, setSelectedAppliances] = useState<string[]>([]);
   const [allergensLoading, setAllergensLoading] = useState(false);
+  const [allergensFallbackMode, setAllergensFallbackMode] = useState(false);
 
   // ── Fetch allergens from backend when step 2 is reached
   useEffect(() => {
@@ -204,15 +218,54 @@ const RegisterScreen: React.FC = () => {
   const fetchAllergens = async () => {
     setAllergensLoading(true);
     try {
-      const res = await apiClient.get('/allergens');
-      const mapped: AllergenOption[] = res.data.map((a: any) => ({
+      const baseUrl = apiClient.defaults.baseURL || process.env.EXPO_PUBLIC_API_URL || '';
+      const endpoint = `${baseUrl.replace(/\/$/, '')}/allergens`;
+      const rawToken = await AsyncStorage.getItem('userToken');
+      const token = (rawToken || '').replace(/^Bearer\s+/i, '').trim();
+      console.log('[Register][Allergens][Request]', {
+        method: 'get',
+        endpoint,
+        baseUrl,
+        hasToken: Boolean(token),
+        tokenLength: token.length,
+      });
+      const res = await apiClient.get(endpoint, {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : undefined,
+      });
+      console.log('[Register][Allergens][Success]', {
+        method: 'get',
+        endpoint,
+        status: res.status,
+      });
+      const raw = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.content)
+          ? res.data.content
+          : Array.isArray(res.data?.data)
+            ? res.data.data
+            : [];
+      const allergens = raw;
+      const mapped: AllergenOption[] = allergens.map((a: any) => ({
         id: a.id,
         name: a.name,
         icon: ALLERGEN_ICONS[a.name?.toUpperCase()] || ShieldAlert,
       }));
-      setAllergenOptions(mapped);
-    } catch (e) {
-      console.error('Error fetching allergens:', e);
+      setAllergenOptions(mapped.length > 0 ? mapped : FALLBACK_ALLERGEN_OPTIONS);
+      setAllergensFallbackMode(mapped.length === 0);
+    } catch (e: any) {
+      console.error('[Register][Allergens][Error]', {
+        method: e?.config?.method,
+        endpoint: e?.config?.url,
+        status: e?.response?.status,
+        responseData: e?.response?.data,
+        message: e?.message,
+      });
+      setAllergenOptions(FALLBACK_ALLERGEN_OPTIONS);
+      setAllergensFallbackMode(true);
     } finally {
       setAllergensLoading(false);
     }
@@ -314,12 +367,35 @@ const RegisterScreen: React.FC = () => {
         householdMode,
         householdName: householdMode === 'CREATE_NEW' ? householdName.trim() : undefined,
         inviteToken: householdMode === 'JOIN_EXISTING' ? inviteToken.trim() : undefined,
-        allergenIds: selectedAllergens,
+        allergenIds: allergensFallbackMode ? [] : selectedAllergens,
         applianceTypes: selectedAppliances,
       });
 
       // Entrar directamente después de registrar
       await signIn({ username: cleanUsername, password: form.password });
+
+      if (selectedAllergens.length > 0) {
+        if (allergensFallbackMode) {
+          try {
+            const backendAllergens = await profileService.getAllAllergens();
+            const selectedNames = selectedAllergens.map((value) => value.toUpperCase());
+            const resolvedIds = backendAllergens
+              .filter((a) => selectedNames.includes(String(a.name || '').toUpperCase()))
+              .map((a) => a.id)
+              .filter(Boolean);
+
+            if (resolvedIds.length > 0) {
+              await profileService.updateAllergensBatch(resolvedIds);
+            }
+          } catch {
+          }
+        } else {
+          try {
+            await profileService.updateAllergensBatch(selectedAllergens);
+          } catch {
+          }
+        }
+      }
 
     } catch (e: any) {
       console.error('Error finishing setup:', e);

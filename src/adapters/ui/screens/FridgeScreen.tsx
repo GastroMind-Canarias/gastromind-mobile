@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ActivityIndicator,
@@ -725,6 +726,13 @@ export default function FridgeApp() {
       toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true,
     }).start();
   }, [fadeAnim, loadInitialData, refreshNotificationState]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh().catch(() => {});
+      refreshNotificationState().catch(() => {});
+    }, [refresh, refreshNotificationState]),
+  );
 
   const requestPushPermission = useCallback(async () => {
     const status = await notificationService.requestPermission();
