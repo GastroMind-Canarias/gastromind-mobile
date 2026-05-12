@@ -71,7 +71,7 @@ Notas:
 
 ```bash
 npm install
-npm run start
+npx expo start
 ```
 
 Targets:

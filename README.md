@@ -80,7 +80,7 @@ EXPO_PUBLIC_API_URL=http://<host>:<port>/api/v1
 ## Scripts
 
 - `npm install` - instalar dependencias
-- `npm run start` - iniciar Expo
+- `npx expo start` - iniciar Expo
 - `npm run android` - abrir en Android
 - `npm run ios` - abrir en iOS
 - `npm run web` - abrir en web
