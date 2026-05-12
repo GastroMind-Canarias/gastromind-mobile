@@ -208,31 +208,8 @@ export const fridgeService = {
       const endpoint = `/fridge-items/me/${id}`;
       const payload = { itemId: id };
 
-      console.log('[FridgeDebug][Delete][Request]', {
-        method: 'delete',
-        endpoint,
-        baseURL: apiClient.defaults.baseURL,
-        fullUrl: `${apiClient.defaults.baseURL || ''}${endpoint}`,
-        itemId: id,
-        payload,
-      });
-
       await apiClient.delete(endpoint, { data: payload });
-
-      console.log('[FridgeDebug][Delete][Success]', {
-        method: 'delete',
-        endpoint,
-        itemId: id,
-      });
     } catch (e) {
-      console.error('[FridgeDebug][Delete][Error]', {
-        itemId: id,
-        message: (e as any)?.message,
-        status: (e as any)?.response?.status,
-        responseData: (e as any)?.response?.data,
-        endpoint: (e as any)?.config?.url,
-        method: (e as any)?.config?.method,
-      });
       throw e;
     }
   },
@@ -254,34 +231,9 @@ export const fridgeService = {
         status: String(nextStatus || '').toUpperCase(),
       };
 
-      console.log('[FridgeDebug][Update][Request]', {
-        method: 'put',
-        endpoint,
-        baseURL: apiClient.defaults.baseURL,
-        fullUrl: `${apiClient.defaults.baseURL || ''}${endpoint}`,
-        itemId: id,
-        payload,
-      });
-
       await apiClient.put(endpoint, payload);
 
-      console.log('[FridgeDebug][Update][Success]', {
-        method: 'put',
-        endpoint,
-        itemId: id,
-        payload,
-      });
-
     } catch (e) {
-      console.error('[FridgeDebug][Update][Error]', {
-        itemId: id,
-        message: (e as any)?.message,
-        status: (e as any)?.response?.status,
-        responseData: (e as any)?.response?.data,
-        endpoint: (e as any)?.config?.url,
-        method: (e as any)?.config?.method,
-        requestData: (e as any)?.config?.data,
-      });
       throw e;
     }
   }

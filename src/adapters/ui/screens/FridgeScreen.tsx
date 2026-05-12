@@ -310,11 +310,6 @@ function TicketModal({
 
   const handlePickImage = async (useCamera: boolean) => {
     try {
-      console.log('[TicketOCR] Inicio flujo imagen', {
-        source: useCamera ? 'camera' : 'gallery',
-        hasUserId: !!userId,
-      });
-
       if (!userId) {
         showDialog({
           title: 'Usuario no disponible',
@@ -355,11 +350,6 @@ function TicketModal({
         });
       }
 
-      console.log('[TicketOCR] Resultado picker', {
-        canceled: result.canceled,
-        assetsCount: result.assets?.length ?? 0,
-      });
-
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selected = result.assets[0];
         if (!selected?.uri) return;
@@ -371,15 +361,6 @@ function TicketModal({
           const fileName = selected.fileName || `ticket-${Date.now()}.jpg`;
           const fileType = selected.mimeType || 'image/jpeg';
 
-          console.log('[TicketOCR] Imagen seleccionada', {
-            uri: selected.uri,
-            fileName,
-            fileType,
-            width: selected.width,
-            height: selected.height,
-            fileSize: selected.fileSize,
-          });
-
           const buildFormData = () => {
             const payload = new FormData();
             payload.append('file', {
@@ -390,14 +371,6 @@ function TicketModal({
             return payload;
           };
 
-          console.log('[TicketOCR] Enviando ticket a backend', {
-            endpoint: '/tickets/from-image',
-            baseURL: apiClient.defaults.baseURL,
-            userId,
-            fileField: 'file',
-            note: 'authorization via interceptor',
-          });
-
           const requestConfig = {
             timeout: 60000,
             headers: {
@@ -406,23 +379,7 @@ function TicketModal({
             },
           };
 
-          console.log('[TicketOCR] Request config', {
-            storeIdSent: false,
-            storeIdSource: 'disabled-by-request',
-            contentType: requestConfig.headers['Content-Type'],
-            accept: requestConfig.headers.Accept,
-          });
-
           const response = await apiClient.post('/tickets/from-image', buildFormData(), requestConfig);
-
-          console.log('[TicketOCR] Respuesta backend', {
-            status: response.status,
-            created_items_count: response?.data?.created_items_count,
-            items_count: response?.data?.items_count,
-            products_count: response?.data?.products_count,
-            items_length: response?.data?.items?.length,
-            products_length: response?.data?.products?.length,
-          });
 
           await onImported();
 
@@ -461,7 +418,7 @@ function TicketModal({
           const retrySecondsMatch = backendMessage.match(/retry in\s+(\d+)/i);
           const retrySeconds = retrySecondsMatch ? Number.parseInt(retrySecondsMatch[1], 10) : null;
 
-          console.error('[TicketOCR] Error processing ticket:', {
+          console.error('Error processing ticket:', {
             message: error?.message,
             status,
             data: error?.response?.data,
@@ -483,11 +440,9 @@ function TicketModal({
             variant: 'danger',
           });
         }
-      } else {
-        console.log('[TicketOCR] Usuario canceló selección de imagen');
       }
     } catch (error) {
-      console.error('[TicketOCR] Error picking image:', error);
+      console.error('Error picking image:', error);
       showDialog({
         title: 'Error',
         message: 'Hubo un problema al intentar abrir la cámara o galería.',

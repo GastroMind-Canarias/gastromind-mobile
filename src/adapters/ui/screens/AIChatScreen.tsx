@@ -91,16 +91,6 @@ const AIChatScreen: React.FC = () => {
       setFavoriteAddedSuggestionId(null);
       setConsumedSuggestionId(null);
     } catch (e: any) {
-      console.error('[AIChat][Suggestion][Error]', {
-        url: e?.config?.url,
-        baseURL: e?.config?.baseURL,
-        method: e?.config?.method,
-        timeout: e?.config?.timeout,
-        code: e?.code,
-        message: e?.message,
-        status: e?.response?.status,
-        responseData: e?.response?.data,
-      });
       const message =
         e?.response?.data?.message ||
         e?.message ||
@@ -196,34 +186,12 @@ const AIChatScreen: React.FC = () => {
 
       const payload = { ingredientsUsed };
 
-      console.log('[AIChat][ConsumeRecipe][Request]', {
-        method: 'put',
-        endpoint,
-        baseURL: apiClient.defaults.baseURL,
-        fullUrl: `${apiClient.defaults.baseURL || ''}${endpoint}`,
-        payload,
-      });
-
       await apiClient.put(endpoint, payload);
-
-      console.log('[AIChat][ConsumeRecipe][Success]', {
-        method: 'put',
-        endpoint,
-        payload,
-      });
 
       const consumedId = getSuggestionId(suggestion);
       if (consumedId) setConsumedSuggestionId(consumedId);
       setSuccess('Ingredientes descontados de la nevera.');
     } catch (e: any) {
-      console.error('[AIChat][ConsumeRecipe][Error]', {
-        message: e?.message,
-        status: e?.response?.status,
-        responseData: e?.response?.data,
-        endpoint: e?.config?.url,
-        method: e?.config?.method,
-        requestData: e?.config?.data,
-      });
       const message =
         e?.response?.data?.message ||
         e?.message ||

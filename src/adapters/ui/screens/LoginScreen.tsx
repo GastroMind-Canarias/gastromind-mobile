@@ -37,8 +37,7 @@ const LoginScreen: React.FC = () => {
 
     try {
       await signIn({ username: username.trim(), password });
-    } catch (e) {
-      console.log("Error de login real:", e);
+    } catch {
     }
   };
 

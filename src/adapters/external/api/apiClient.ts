@@ -6,5 +6,3 @@ export const apiClient = axios.create({
   baseURL: API_URL,
   timeout: 10000,
 });
-
-console.log('Intentando conectar a:', API_URL);

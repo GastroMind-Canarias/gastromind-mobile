@@ -131,19 +131,9 @@ function logApiError(context: string, error: any): void {
 async function updateMyAllergensBatch(allergenIds: string[]): Promise<void> {
   const ids = unique(allergenIds);
   const endpoint = "/users/me/allergens";
-  console.log("[ProfileDebug][UpdateAllergensBatch][Request]", {
-    endpoint,
-    allergenIdsCount: ids.length,
-    allergenIds: ids,
-  });
 
   await apiClient.put(endpoint, {
     allergenIds: ids,
-  });
-
-  console.log("[ProfileDebug][UpdateAllergensBatch][Success]", {
-    endpoint,
-    allergenIdsCount: ids.length,
   });
 }
 
@@ -159,34 +149,9 @@ async function updateMyAppliancesBatch(applianceTypes: string[]): Promise<void> 
     appliances: nextAppliances,
   };
 
-  const baseUrl = apiClient.defaults.baseURL || "";
-  const fullUrl = `${baseUrl}${endpoint}`;
-
-  console.log("[ProfileDebug][UpdateAppliancesBatch][Request]", {
-    method: "post",
-    endpoint,
-    fullUrl,
-    payload,
-  });
-
   try {
     await apiClient.post(endpoint, payload);
-    console.log("[ProfileDebug][UpdateAppliancesBatch][Success]", {
-      method: "post",
-      endpoint,
-      fullUrl,
-      payload,
-    });
   } catch (error: any) {
-    console.error("[ProfileDebug][UpdateAppliancesBatch][Error]", {
-      method: "post",
-      endpoint,
-      fullUrl,
-      payload,
-      status: error?.response?.status,
-      responseData: error?.response?.data,
-      message: error?.message,
-    });
     throw error;
   }
 }

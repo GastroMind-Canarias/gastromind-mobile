@@ -142,30 +142,9 @@ const RecipeDetailScreen: React.FC = () => {
 
     setConsumeLoading(true);
     try {
-      console.log('[RecipeDetail][ConsumeRecipe][Request]', {
-        method: 'put',
-        endpoint,
-        baseURL: apiClient.defaults.baseURL,
-        fullUrl: `${apiClient.defaults.baseURL || ''}${endpoint}`,
-        payload,
-      });
-
       await apiClient.put(endpoint, payload);
-
-      console.log('[RecipeDetail][ConsumeRecipe][Success]', {
-        method: 'put',
-        endpoint,
-        payload,
-      });
       showDialog({ title: 'Listo', message: 'Ingredientes descontados de la nevera.', variant: 'success' });
     } catch (error: any) {
-      console.error('[RecipeDetail][ConsumeRecipe][Error]', {
-        method: error?.config?.method,
-        endpoint: error?.config?.url,
-        status: error?.response?.status,
-        responseData: error?.response?.data,
-        message: error?.message,
-      });
       const message =
         error?.response?.data?.message ||
         error?.message ||
