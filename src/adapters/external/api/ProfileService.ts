@@ -1,84 +1,66 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Allergen,
   KitchenTool,
   UserProfile,
 } from "../../../core/domain/profile.types";
 import { apiClient } from "./apiClient";
+import { favoriteService } from "./FavoriteService";
 
-function decodeJwtPayload(token: string): any {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join(""),
-    );
-    return JSON.parse(jsonPayload);
-  } catch {
-    return null;
+function pickText(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
   }
+  return "";
 }
 
-let cachedUserId: string | null = null;
-let cachedHouseholdId: string | null = null;
-
+/**
+ * User identity comes from /users/me.
+ * Household context comes from /households/me.
+ */
 async function getCurrentUser(): Promise<{
   userId: string;
   householdId: string;
   name: string;
   email: string;
+  allergens?: any[];
+  householdData?: any;
 } | null> {
   try {
-    const token = await AsyncStorage.getItem("userToken");
-    if (!token) return null;
+    const userRes = await apiClient.get("/users/me");
+    const me = userRes.data;
+    if (!me) {
+      console.error("Error fetching /users/me: empty payload");
+      return null;
+    }
 
-    const payload = decodeJwtPayload(token);
-    if (!payload?.sub) return null;
+    let householdData: any = null;
+    try {
+      const householdRes = await apiClient.get("/households/me");
+      householdData = householdRes.data;
+    } catch (householdError: any) {
+      console.error("Error fetching /households/me:", householdError?.message);
+    }
 
-    const username = payload.sub;
+    const userAllergens =
+      me.allergens || me.userAllergens || me.allergyProfiles || [];
 
-    // Find user by username
-    const usersRes = await apiClient.get("/users");
-    const me = usersRes.data.find(
-      (u: any) => u.name?.toLowerCase() === username.toLowerCase(),
-    );
-
-    if (!me) return null;
-
-    cachedUserId = me.id;
-    cachedHouseholdId = me.houseHold_id ?? null;
+    favoriteService.syncMineOfflineCache();
 
     return {
-      userId: me.id,
-      householdId: me.houseHold_id ?? "",
-      name: me.name ?? username,
-      email: me.email ?? "",
+      userId: pickText(me.id, me.userId, me.user_id),
+      householdId: pickText(me.householdId, me.household_id, householdData?.id),
+      name: pickText(me.name, me.username, me.userName),
+      email: pickText(me.email),
+      allergens: userAllergens,
+      householdData,
     };
-  } catch (e) {
-    console.error("Error getting current user:", e);
+  } catch (e: any) {
+    console.error("Error fetching /users/me:", e?.message);
     return null;
   }
 }
-
-const ALLERGEN_EMOJIS: Record<string, string> = {
-  GLUTEN: "🌾",
-  LACTOSA: "🥛",
-  FRUTOS_SECOS: "🥜",
-  HUEVO: "🥚",
-  MARISCO: "🦐",
-  PESCADO: "🐟",
-  SOJA: "🫘",
-  CACAHUETE: "🥜",
-  APIO: "🥬",
-  MOSTAZA: "🟡",
-  SESAMO: "🫘",
-  ALTRAMUZ: "🌿",
-  MOLUSCOS: "🐚",
-  SULFITOS: "🍷",
-};
 
 const APPLIANCE_TO_TOOL: Record<string, KitchenTool> = {
   HORNO: KitchenTool.HORNO,
@@ -86,11 +68,21 @@ const APPLIANCE_TO_TOOL: Record<string, KitchenTool> = {
   AIR_FRYER: KitchenTool.AIR_FRYER,
   VITROCERAMICA: KitchenTool.VITROCERAMICA,
   ROBOT_COCINA: KitchenTool.ROBOT_COCINA,
-  BATIDORA: KitchenTool.BATIDORA,
-  SARTEN: KitchenTool.SARTEN,
+  OLLA_EXPRESS: KitchenTool.OLLA_EXPRESS,
+  FREIDORA: KitchenTool.FREIDORA,
+  GRILL: KitchenTool.GRILL,
 };
 
-// ─── Backend allergen name → frontend Allergen enum mapping ──────────────────
+const TOOL_TO_APPLIANCE: Record<KitchenTool, string> = Object.entries(
+  APPLIANCE_TO_TOOL,
+).reduce(
+  (acc, [appliance, tool]) => {
+    acc[tool] = appliance;
+    return acc;
+  },
+  {} as Record<KitchenTool, string>,
+);
+
 const ALLERGEN_NAME_TO_ENUM: Record<string, Allergen> = {
   GLUTEN: Allergen.GLUTEN,
   LACTOSA: Allergen.LACTOSA,
@@ -106,14 +98,73 @@ export interface BackendAllergen {
   name: string;
 }
 
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))];
+}
+
+function extractAllergenIds(allergens?: any[]): string[] {
+  if (!Array.isArray(allergens)) return [];
+  return unique(
+    allergens
+      .map((item) =>
+        pickText(
+          typeof item === "string" ? item : "",
+          item?.id,
+          item?.allergenId,
+          item?.allergen_id,
+        ),
+      )
+      .map((id) => id.trim()),
+  );
+}
+
+function logApiError(context: string, error: any): void {
+  console.error(context, {
+    status: error?.response?.status,
+    url: error?.config?.url,
+    method: error?.config?.method,
+    data: error?.response?.data,
+    message: error?.message,
+  });
+}
+
+async function updateMyAllergensBatch(allergenIds: string[]): Promise<void> {
+  const ids = unique(allergenIds);
+  const endpoint = "/users/me/allergens";
+
+  await apiClient.put(endpoint, {
+    allergenIds: ids,
+  });
+}
+
+async function updateMyAppliancesBatch(applianceTypes: string[]): Promise<void> {
+  const endpoint = "/households/me/appliances/batch";
+  const nextAppliances = unique(
+    applianceTypes
+      .map((item) => item.toUpperCase().trim())
+      .filter(Boolean),
+  );
+
+  const payload = {
+    appliances: nextAppliances,
+  };
+
+  try {
+    await apiClient.post(endpoint, payload);
+  } catch (error: any) {
+    throw error;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 export const profileService = {
   /**
-   * Fetch full profile from the API
+   * Fetch full profile from /users/me + /households/me
    */
   get: async (): Promise<UserProfile> => {
     const empty: UserProfile = {
       id: "",
+      householdId: "",
       name: "",
       email: "",
       kitchenTools: [],
@@ -123,73 +174,64 @@ export const profileService = {
     };
 
     try {
-      const user = await getCurrentUser();
-      if (!user) return empty;
+      const data = await getCurrentUser();
+      if (!data) return empty;
 
       const profile: UserProfile = {
-        id: user.userId,
-        name: user.name,
-        email: user.email,
+        id: data.userId,
+        householdId: data.householdId,
+        name: data.name,
+        email: data.email,
         kitchenTools: [],
         householdMembers: [],
         allergens: [],
         customAllergens: [],
       };
 
-      // Fetch household members & appliances
-      if (user.householdId) {
-        try {
-          const membersRes = await apiClient.get(
-            `/households/${user.householdId}/members`,
-          );
-          profile.householdMembers = membersRes.data.map((m: any) => ({
-            id: m.id,
-            name: m.name,
-          }));
-        } catch (e) {
-          console.warn("Error fetching household members:", e);
-        }
-
-        try {
-          const appliancesRes = await apiClient.get(
-            `/households/${user.householdId}/appliances`,
-          );
-          profile.kitchenTools = appliancesRes.data
-            .map((a: any) => APPLIANCE_TO_TOOL[a.appliance])
-            .filter(Boolean);
-        } catch (e) {
-          console.warn("Error fetching appliances:", e);
-        }
+      // Extract household members
+      if (data.householdData?.members) {
+        profile.householdMembers = data.householdData.members.map((m: any) => ({
+          id: m.id,
+          name: m.name,
+        }));
       }
 
-      // Fetch user allergens
-      try {
-        const allergensRes = await apiClient.get(
-          `/users/${user.userId}/allergens`,
-        );
-        const backendAllergens: BackendAllergen[] = allergensRes.data;
+      // Extract household appliances
+      if (data.householdData?.appliances) {
+        profile.kitchenTools = data.householdData.appliances
+          .map((a: any) =>
+            APPLIANCE_TO_TOOL[
+              pickText(
+                typeof a === "string" ? a : "",
+                a?.appliance,
+                a?.name,
+                a?.type,
+              ).toUpperCase()
+            ],
+          )
+          .filter(Boolean);
+      }
 
-        for (const ba of backendAllergens) {
-          const enumVal = ALLERGEN_NAME_TO_ENUM[ba.name?.toUpperCase()];
-          if (enumVal) {
-            profile.allergens.push(enumVal);
-          } else {
-            profile.customAllergens.push(ba.name);
-          }
+      // User allergens (found within the member object)
+      const backendAllergens: BackendAllergen[] = data.allergens || [];
+      for (const ba of backendAllergens) {
+        const enumVal = ALLERGEN_NAME_TO_ENUM[ba.name?.toUpperCase()];
+        if (enumVal) {
+          profile.allergens.push(enumVal);
+        } else {
+          profile.customAllergens.push(ba.name);
         }
-      } catch (e) {
-        console.warn("Error fetching user allergens:", e);
       }
 
       return profile;
     } catch (e) {
-      console.error("Error fetching profile:", e);
+      console.error("Error fetching consolidated profile:", e);
       return empty;
     }
   },
 
   /**
-   * Get all available allergens from the backend (for the full list)
+   * Get all available allergens from the backend
    */
   getAllAllergens: async (): Promise<BackendAllergen[]> => {
     try {
@@ -206,33 +248,32 @@ export const profileService = {
    */
   toggleTool: async (tool: KitchenTool): Promise<void> => {
     const user = await getCurrentUser();
-    if (!user?.householdId) return;
+    if (!user) return;
 
-    const applianceKey = Object.entries(APPLIANCE_TO_TOOL).find(
-      ([, v]) => v === tool,
-    )?.[0];
+    const applianceKey = TOOL_TO_APPLIANCE[tool];
     if (!applianceKey) return;
 
     try {
-      // Check if already present
-      const appliancesRes = await apiClient.get(
-        `/households/${user.householdId}/appliances`,
-      );
-      const existing = appliancesRes.data.find(
-        (a: any) => a.appliance === applianceKey,
+      const currentAppliances = unique(
+        (user.householdData?.appliances || [])
+          .map((appliance: any) =>
+            pickText(
+              typeof appliance === "string" ? appliance : "",
+              appliance?.appliance,
+              appliance?.name,
+              appliance?.type,
+            ).toUpperCase(),
+          )
+          .filter(Boolean),
       );
 
-      if (existing) {
-        // Remove
-        await apiClient.delete(`/households/appliances/${existing.id}`);
-      } else {
-        // Add
-        await apiClient.post(
-          `/households/${user.householdId}/appliances?appliance=${applianceKey}`,
-        );
-      }
+      const updatedAppliances = currentAppliances.includes(applianceKey)
+        ? currentAppliances.filter((item) => item !== applianceKey)
+        : [...currentAppliances, applianceKey];
+
+      await updateMyAppliancesBatch(updatedAppliances);
     } catch (e) {
-      console.error("Error toggling tool:", e);
+      logApiError("Error toggling tool", e);
     }
   },
 
@@ -244,61 +285,84 @@ export const profileService = {
     if (!user) return;
 
     try {
-      // Get user allergens
-      const myAllergensRes = await apiClient.get(
-        `/users/${user.userId}/allergens`,
-      );
-      const myAllergens: BackendAllergen[] = myAllergensRes.data;
-      const exists = myAllergens.find(
-        (a) => a.name?.toUpperCase() === allergenName.toUpperCase(),
+      const exists = user.allergens?.find(
+        (a: any) => a.name?.toUpperCase() === allergenName.toUpperCase(),
       );
 
-      if (exists) {
-        // Remove
-        await apiClient.delete(`/users/${user.userId}/allergens/${exists.id}`);
-      } else {
-        // Find allergen ID from all allergens
+      const existingIds = extractAllergenIds(user.allergens);
+      let allergenId = pickText(exists?.id, exists?.allergenId, exists?.allergen_id);
+
+      if (!allergenId) {
         const allRes = await apiClient.get("/allergens");
         const allergen = allRes.data.find(
           (a: any) => a.name?.toUpperCase() === allergenName.toUpperCase(),
         );
-        if (allergen) {
-          await apiClient.post(
-            `/users/${user.userId}/allergens/${allergen.id}`,
-          );
-        }
+        allergenId = pickText(allergen?.id, allergen?.allergenId, allergen?.allergen_id);
       }
+
+      if (!allergenId) return;
+
+      const updatedIds = existingIds.includes(allergenId)
+        ? existingIds.filter((id) => id !== allergenId)
+        : [...existingIds, allergenId];
+
+      await updateMyAllergensBatch(updatedIds);
     } catch (e) {
-      console.error("Error toggling allergen:", e);
+      logApiError("Error toggling allergen", e);
     }
   },
 
   /**
-   * Add a custom allergen (creates in backend then adds to user)
+   * Update user allergens in batch
+   */
+  updateAllergensBatch: async (allergenIds: string[]): Promise<void> => {
+    try {
+      await updateMyAllergensBatch(allergenIds);
+    } catch (e) {
+      logApiError("Error updating allergens batch", e);
+      throw e;
+    }
+  },
+
+  /**
+   * Update household appliances in batch
+   */
+  updateAppliancesBatch: async (applianceTypes: string[]): Promise<void> => {
+    try {
+      await updateMyAppliancesBatch(applianceTypes);
+    } catch (e) {
+      logApiError("Error updating appliances batch", e);
+      throw e;
+    }
+  },
+
+  /**
+   * Add a custom allergen
    */
   addCustomAllergen: async (allergenName: string): Promise<void> => {
     const user = await getCurrentUser();
     if (!user) return;
 
     try {
-      // Check if allergen already exists in the system
       const allRes = await apiClient.get("/allergens");
       let allergen = allRes.data.find(
         (a: any) => a.name?.toLowerCase() === allergenName.toLowerCase(),
       );
 
       if (!allergen) {
-        // Create the allergen
         const created = await apiClient.post("/allergens", {
           name: allergenName,
         });
         allergen = created.data;
       }
 
-      // Add to user
-      await apiClient.post(`/users/${user.userId}/allergens/${allergen.id}`);
+      const existingIds = extractAllergenIds(user.allergens);
+      const allergenId = pickText(allergen?.id, allergen?.allergenId, allergen?.allergen_id);
+      if (!allergenId) return;
+
+      await updateMyAllergensBatch([...existingIds, allergenId]);
     } catch (e) {
-      console.error("Error adding custom allergen:", e);
+      logApiError("Error adding custom allergen", e);
     }
   },
 
@@ -306,32 +370,20 @@ export const profileService = {
    * Remove custom allergen from user
    */
   toggleCustomAllergen: async (allergenName: string): Promise<void> => {
-    // Same as toggleAllergen since custom allergens are stored the same way
     await profileService.toggleAllergen(allergenName);
   },
 
-  /**
-   * Get household ID for the current user
-   */
   getHouseholdId: async (): Promise<string | null> => {
     const user = await getCurrentUser();
     return user?.householdId ?? null;
   },
 
-  /**
-   * Get user ID for the current user
-   */
   getUserId: async (): Promise<string | null> => {
     const user = await getCurrentUser();
     return user?.userId ?? null;
   },
 
-  /**
-   * Not used in current API - members are managed via household endpoints
-   */
   addMember: async (_name: string): Promise<void> => {
-    // The backend doesn't support creating users by name directly.
-    // Members are invited via token. This is a placeholder.
     console.warn("addMember: Use household invite flow instead");
   },
 
@@ -340,14 +392,13 @@ export const profileService = {
    */
   removeMember: async (memberId: string): Promise<void> => {
     const user = await getCurrentUser();
-    if (!user?.householdId) return;
+    if (!user) return;
 
     try {
-      await apiClient.delete(
-        `/households/${user.householdId}/members/${memberId}?ownerId=${user.userId}`,
-      );
+      await apiClient.delete(`/households/me/members/${memberId}`);
     } catch (e) {
       console.error("Error removing member:", e);
+      throw e;
     }
   },
 

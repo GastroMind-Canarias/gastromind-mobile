@@ -12,8 +12,8 @@
       "supportsTablet": true
     },
     "androidNavigationBar": {
-      "visible": "sticky-immersive",
-      "backgroundColor": "#00000000"
+      "backgroundColor": "#0D1F17",
+      "barStyle": "light-content"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,9 +22,9 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
-      "usesCleartextTraffic": true
+      "package": "com.anonymous.gastromindmobile"
     },
     "web": {
       "output": "static",
@@ -33,21 +33,32 @@
     "plugins": [
       "expo-router",
       [
-        "expo-splash-screen",
+        "expo-notifications",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
+          "icon": "./assets/images/icon.png",
+          "color": "#4DC763"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "024e06fa-9b33-459a-9c12-5ba555ad4a36"
+      }
+    },
+    "owner": "gastromind-team"
   }
 }

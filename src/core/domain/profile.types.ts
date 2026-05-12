@@ -14,8 +14,9 @@ export enum KitchenTool {
     AIR_FRYER = 'AIR_FRYER',
     VITROCERAMICA = 'VITROCERAMICA',
     ROBOT_COCINA = 'ROBOT_COCINA',
-    BATIDORA = 'BATIDORA',
-    SARTEN = 'SARTEN',
+    OLLA_EXPRESS = 'OLLA_EXPRESS',
+    FREIDORA = 'FREIDORA',
+    GRILL = 'GRILL',
 }
 
 export interface HouseholdMember {
@@ -25,6 +26,7 @@ export interface HouseholdMember {
 
 export interface UserProfile {
     id: string;
+    householdId: string;
     name: string;
     email: string;
     kitchenTools: KitchenTool[];

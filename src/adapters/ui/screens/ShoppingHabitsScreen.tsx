@@ -1,0 +1,715 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { CheckCircle2, CircleAlert, ReceiptText, Store } from 'lucide-react-native';
+import { COLORS } from '../../../shared/theme/colors';
+import { useTheme } from '../../../shared/theme/ThemeProvider';
+import {
+  HabitualItemStatus,
+  ShoppingHabitsSummary,
+  shoppingHabitsService,
+} from '../../external/api/ShoppingHabitsService';
+
+const DARK = '#0D1F17';
+
+const money = (value: number): string => {
+  try {
+    return new Intl.NumberFormat('es-ES', {
+      style: 'currency',
+      currency: 'EUR',
+      maximumFractionDigits: 2,
+    }).format(value || 0);
+  } catch {
+    return `${(value || 0).toFixed(2)} EUR`;
+  }
+};
+
+const qty = (value: number): string => {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(1);
+};
+
+const formatDateTime = (value?: string): string => {
+  if (!value) return 'Sin fecha';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+function HabitItemCard({ item, isDark }: { item: HabitualItemStatus; isDark: boolean }) {
+  const target = Math.max(0, item.targetQuantity);
+  const current = Math.max(0, item.currentQuantity);
+  const coverage = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 100;
+
+  return (
+    <View
+      style={[
+        styles.itemRow,
+        item.hasEnough ? styles.itemRowOk : styles.itemRowLow,
+        isDark && (item.hasEnough ? styles.itemRowOkDark : styles.itemRowLowDark),
+      ]}
+    >
+      <View style={[styles.itemAccent, item.hasEnough ? styles.itemAccentOk : styles.itemAccentLow]} />
+
+      <View style={styles.itemTop}>
+        <Text style={[styles.itemName, isDark && { color: COLORS.white }]}>{item.productName}</Text>
+        <View
+          style={[
+            styles.badge,
+            item.hasEnough ? styles.badgeOk : styles.badgeMissing,
+            isDark && (item.hasEnough ? styles.badgeOkDark : styles.badgeMissingDark),
+          ]}
+        >
+          {item.hasEnough ? (
+            <CheckCircle2 size={12} color={COLORS.primary} strokeWidth={2.8} />
+          ) : (
+            <CircleAlert size={12} color={COLORS.error} strokeWidth={2.8} />
+          )}
+          <Text style={[styles.badgeText, item.hasEnough ? styles.badgeTextOk : styles.badgeTextMissing]}>
+            {item.hasEnough ? 'Completo' : `Faltan ${qty(item.missingQuantity)}`}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.kpiRow}>
+        <View style={[styles.kpiBox, isDark && { backgroundColor: COLORS.white + '12', borderColor: COLORS.white + '22' }]}>
+          <Text style={[styles.kpiLabel, isDark && { color: COLORS.white, opacity: 0.74 }]}>Objetivo</Text>
+          <Text style={[styles.kpiValue, isDark && { color: COLORS.white }]}>{qty(item.targetQuantity)} {item.quantityUnit || ''}</Text>
+        </View>
+        <View style={[styles.kpiBox, isDark && { backgroundColor: COLORS.white + '12', borderColor: COLORS.white + '22' }]}>
+          <Text style={[styles.kpiLabel, isDark && { color: COLORS.white, opacity: 0.74 }]}>Nevera</Text>
+          <Text style={[styles.kpiValue, isDark && { color: COLORS.white }]}>{qty(item.currentQuantity)} {item.quantityUnit || ''}</Text>
+        </View>
+      </View>
+
+      <View style={[styles.itemProgressTrack, isDark && { backgroundColor: COLORS.white + '16' }]}> 
+        <View
+          style={[
+            styles.itemProgressFill,
+            { width: `${coverage}%` },
+            item.hasEnough ? styles.itemProgressFillOk : styles.itemProgressFillLow,
+          ]}
+        />
+      </View>
+
+      <View style={styles.itemMetaRow}>
+        <Text style={[styles.itemMetaTag, isDark && { backgroundColor: COLORS.white + '14', borderColor: COLORS.white + '22', color: COLORS.white }]}>Score {qty(item.score || 0)}</Text>
+        <Text style={[styles.itemMetaTagStrong, isDark && { color: COLORS.white }]}>Cobertura {coverage}%</Text>
+      </View>
+      {(item.lastPurchasedAt || item.score || item.distinctTicketCount) ? (
+        <View style={styles.itemMetaRow}>
+          <Text style={[styles.itemMeta, isDark && { color: COLORS.white, opacity: 0.72 }]}>Ult. compra: {formatDateTime(item.lastPurchasedAt)}</Text>
+          <Text style={[styles.itemMeta, isDark && { color: COLORS.white, opacity: 0.72 }]}>Tickets: {item.distinctTicketCount || 0}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export default function ShoppingHabitsScreen() {
+  const { colors, isDark } = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<ShoppingHabitsSummary>({
+    habitualItems: [],
+    totalSpentThisMonth: 0,
+    topStoreName: 'Sin datos',
+    topStoreVisits: 0,
+  });
+
+  const missingCount = useMemo(
+    () => summary.habitualItems.filter((item) => !item.hasEnough).length,
+    [summary.habitualItems]
+  );
+  const completeCount = Math.max(0, summary.habitualItems.length - missingCount);
+  const totalHabitualCount = summary.habitualItems.length;
+  const coveragePct = totalHabitualCount > 0 ? Math.round((completeCount / totalHabitualCount) * 100) : 0;
+  const [chartTrackWidth, setChartTrackWidth] = useState(0);
+  const coverageAnim = React.useRef(new Animated.Value(0)).current;
+  const fillWidth = coverageAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, chartTrackWidth],
+  });
+
+  const load = useCallback(async () => {
+    try {
+      setError(null);
+      const data = await shoppingHabitsService.getSummary();
+      setSummary(data);
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        'No pudimos cargar tu compra habitual ahora mismo.';
+      setError(message);
+    }
+  }, []);
+
+  useEffect(() => {
+    const run = async () => {
+      setLoading(true);
+      await load();
+      setLoading(false);
+    };
+    run();
+  }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load().catch(() => {});
+    }, [load])
+  );
+
+  useEffect(() => {
+    Animated.timing(coverageAnim, {
+      toValue: coveragePct,
+      duration: 380,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [coverageAnim, coveragePct]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
+
+  return (
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: isDark ? colors.background : '#EDF6F0' }]}
+      edges={['top']}
+    >
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? colors.background : DARK} />
+      <View style={styles.backgroundDecoA} />
+      <View style={styles.backgroundDecoB} />
+      <View style={styles.backgroundDecoC} />
+      <View style={styles.backgroundDecoD} />
+      <View style={styles.backgroundDecoE} />
+
+        <View style={[styles.header, isDark && { backgroundColor: colors.forest }]}> 
+        <Text style={styles.headerEyebrow}>Compra inteligente</Text>
+        <Text style={styles.headerTitle}>Compras habituales</Text>
+        <Text style={styles.headerSub}>
+          Te mostramos lo que ya tenes y lo que te falta de tu compra tipo.
+        </Text>
+      </View>
+
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Cargando resumen...</Text>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.metricsRow}>
+            <View style={[styles.metricCard, isDark && { backgroundColor: colors.surface, borderColor: colors.secondary + '55' }]}>
+              <View style={styles.metricIconWrap}>
+                <ReceiptText size={16} color={COLORS.primary} strokeWidth={2.6} />
+              </View>
+              <Text style={[styles.metricLabel, isDark && { color: COLORS.white, opacity: 0.75 }]}>Gastado este mes</Text>
+              <Text style={[styles.metricValue, isDark && { color: COLORS.white }]}>{money(summary.totalSpentThisMonth)}</Text>
+            </View>
+
+            <View style={[styles.metricCard, isDark && { backgroundColor: colors.surface, borderColor: colors.secondary + '55' }]}> 
+              <View style={styles.metricIconWrap}>
+                <Store size={16} color={COLORS.primary} strokeWidth={2.6} />
+              </View>
+              <Text style={[styles.metricLabel, isDark && { color: COLORS.white, opacity: 0.75 }]}>Supermercado top</Text>
+              <Text style={[styles.metricValueSmall, isDark && { color: COLORS.white }]}>{summary.topStoreName}</Text>
+              <Text style={[styles.metricHint, isDark && { color: COLORS.white, opacity: 0.75 }]}>{summary.topStoreVisits} compras este mes</Text>
+            </View>
+          </View>
+
+          <View style={styles.sectionHead}>
+            <Text style={[styles.sectionTitle, isDark && { color: COLORS.white }]}>Checklist habitual</Text>
+            <Text style={styles.sectionPill}>{missingCount} pendientes</Text>
+          </View>
+
+          <View style={[styles.chartCard, isDark && { backgroundColor: colors.surface, borderColor: colors.secondary + '55' }]}>
+            <View style={styles.chartHead}>
+              <Text style={[styles.chartTitle, isDark && { color: COLORS.white }]}>Cobertura de compra habitual</Text>
+              <Text style={styles.chartPct}>{coveragePct}%</Text>
+            </View>
+            <Text style={[styles.chartSub, isDark && { color: COLORS.white, opacity: 0.72 }]}>Motivo: ver de un vistazo si tu compra tipo está cubierta con lo que ya hay en nevera.</Text>
+
+            <View
+              style={[styles.chartTrack, isDark && { backgroundColor: COLORS.white + '18' }]}
+              onLayout={(event) => {
+                const width = Math.max(0, Math.round(event.nativeEvent.layout.width));
+                if (width !== chartTrackWidth) setChartTrackWidth(width);
+              }}
+            >
+              <Animated.View style={[styles.chartFill, { width: fillWidth }]} />
+            </View>
+
+            <View style={styles.chartLegendRow}>
+              <View style={styles.chartLegendItem}>
+                <View style={[styles.chartLegendDot, { backgroundColor: COLORS.primary }]} />
+                <Text style={[styles.chartLegendText, isDark && { color: COLORS.white, opacity: 0.86 }]}>Cubiertos: {completeCount}</Text>
+              </View>
+              <View style={styles.chartLegendItem}>
+                <View style={[styles.chartLegendDot, { backgroundColor: COLORS.error }]} />
+                <Text style={[styles.chartLegendText, isDark && { color: COLORS.white, opacity: 0.86 }]}>Pendientes: {missingCount}</Text>
+              </View>
+            </View>
+          </View>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          {summary.habitualItems.length === 0 ? (
+            <View style={[styles.emptyCard, isDark && { backgroundColor: colors.surface, borderColor: colors.secondary + '66' }]}> 
+              <Text style={[styles.emptyTitle, isDark && { color: COLORS.white }]}>Todavía no hay compra habitual configurada</Text>
+              <Text style={[styles.emptySub, isDark && { color: COLORS.white, opacity: 0.75 }]}> 
+                Cuando el backend tenga registros en compra habitual, acá vas a ver qué te falta.
+              </Text>
+            </View>
+          ) : (
+            summary.habitualItems.map((item) => <HabitItemCard key={item.id} item={item} isDark={isDark} />)
+          )}
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#EDF6F0', overflow: 'hidden' },
+  backgroundDecoA: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: COLORS.primary + '26',
+    top: -84,
+    right: -50,
+  },
+  backgroundDecoB: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: COLORS.accent + '22',
+    bottom: -36,
+    left: -40,
+  },
+  backgroundDecoC: {
+    position: 'absolute',
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: COLORS.primary + '14',
+    top: 210,
+    left: -24,
+  },
+  backgroundDecoD: {
+    position: 'absolute',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: COLORS.accent + '14',
+    top: 380,
+    right: -28,
+  },
+  backgroundDecoE: {
+    position: 'absolute',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: COLORS.primary + '10',
+    bottom: 170,
+    left: 22,
+  },
+  header: {
+    backgroundColor: DARK,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerEyebrow: {
+    color: '#9FD7B2',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  headerTitle: {
+    color: COLORS.white,
+    fontSize: 27,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  headerSub: {
+    color: '#D5EBDD',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 5,
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 110,
+    gap: 12,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  metricCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DCECE1',
+    backgroundColor: COLORS.white,
+    padding: 12,
+  },
+  metricIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: '#ECF8EF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  metricLabel: {
+    color: COLORS.text,
+    opacity: 0.58,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  metricValue: {
+    color: DARK,
+    fontSize: 19,
+    fontWeight: '900',
+    marginTop: 6,
+  },
+  metricValueSmall: {
+    color: DARK,
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 6,
+  },
+  metricHint: {
+    color: COLORS.text,
+    opacity: 0.6,
+    fontSize: 11,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  sectionHead: {
+    marginTop: 6,
+    marginBottom: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    color: DARK,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  sectionPill: {
+    color: '#8A5A17',
+    fontSize: 11,
+    fontWeight: '800',
+    backgroundColor: COLORS.accent + '2B',
+    borderColor: COLORS.accent + '55',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  chartCard: {
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#DDECE2',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    gap: 8,
+  },
+  chartHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  chartTitle: {
+    color: DARK,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  chartPct: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  chartSub: {
+    color: COLORS.text,
+    opacity: 0.66,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  chartTrack: {
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: '#E8F4EC',
+    overflow: 'hidden',
+  },
+  chartFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+  },
+  chartLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  chartLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  chartLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  chartLegendText: {
+    color: COLORS.text,
+    opacity: 0.75,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  itemCard: {
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#DDECE2',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+  },
+  itemRow: {
+    position: 'relative',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DDECE2',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  itemRowOk: {
+    backgroundColor: '#F7FCF8',
+  },
+  itemRowLow: {
+    backgroundColor: '#FFF8F8',
+  },
+  itemRowOkDark: {
+    backgroundColor: '#11351A',
+    borderColor: COLORS.secondary + '66',
+  },
+  itemRowLowDark: {
+    backgroundColor: '#2A1717',
+    borderColor: '#7A3F3F',
+  },
+  itemAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 5,
+  },
+  itemAccentOk: {
+    backgroundColor: '#27B05A',
+  },
+  itemAccentLow: {
+    backgroundColor: '#E45555',
+  },
+  itemTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  itemName: {
+    flex: 1,
+    color: DARK,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  badgeOk: {
+    backgroundColor: '#E9F8EE',
+    borderColor: '#B7E8C5',
+  },
+  badgeOkDark: {
+    backgroundColor: '#1E4A33',
+    borderColor: '#2F8A5A',
+  },
+  badgeMissing: {
+    backgroundColor: '#FFF0F0',
+    borderColor: '#F8CACA',
+  },
+  badgeMissingDark: {
+    backgroundColor: '#4A2222',
+    borderColor: '#A14A4A',
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  badgeTextOk: {
+    color: '#1F8B3F',
+  },
+  badgeTextMissing: {
+    color: '#B33E3E',
+  },
+  itemMetaRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  itemMeta: {
+    color: COLORS.text,
+    opacity: 0.72,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  itemMetaTag: {
+    color: COLORS.text,
+    fontSize: 11,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: '#DCECE1',
+    backgroundColor: '#F5FAF7',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  itemMetaTagStrong: {
+    color: DARK,
+    fontSize: 11,
+    fontWeight: '900',
+    marginLeft: 'auto',
+    alignSelf: 'center',
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  kpiBox: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DDECE2',
+    backgroundColor: '#F6FBF8',
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+  },
+  kpiLabel: {
+    color: COLORS.text,
+    opacity: 0.62,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  kpiValue: {
+    color: DARK,
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  itemProgressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#E8F4EC',
+    overflow: 'hidden',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  itemProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  itemProgressFillOk: {
+    backgroundColor: '#27B05A',
+  },
+  itemProgressFillLow: {
+    backgroundColor: '#E45555',
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  emptyCard: {
+    borderRadius: 15,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#C9DED1',
+    backgroundColor: '#F6FBF8',
+    padding: 14,
+  },
+  emptyTitle: {
+    color: DARK,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  emptySub: {
+    color: COLORS.text,
+    opacity: 0.68,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+});

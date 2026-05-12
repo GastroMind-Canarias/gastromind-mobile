@@ -9,5 +9,9 @@ export interface LoginCredentials {
 
 export interface RegisterData extends LoginCredentials {
   email: string;
-  role: 'ROLE_MEMBER' | 'ROLE_ADMIN' | 'ROLE_OWNER' | 'ROLE_PREMIUM_MEMBER';
+  householdMode: 'CREATE_NEW' | 'JOIN_EXISTING';
+  householdName?: string;
+  inviteToken?: string;
+  allergenIds: string[];
+  applianceTypes?: string[];
 }

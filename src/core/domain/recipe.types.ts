@@ -1,3 +1,11 @@
+export interface RecipeIngredientUsed {
+  itemId?: string;
+  productId: string;
+  productName: string;
+  quantityUsed: number;
+  quantityAvailable: number;
+}
+
 export interface Recipe {
   id: string;
   title: string;
@@ -10,4 +18,5 @@ export interface Recipe {
   calories: number;
   image_url: string;
   created_at: string;
+  ingredientsUsed?: RecipeIngredientUsed[];
 }

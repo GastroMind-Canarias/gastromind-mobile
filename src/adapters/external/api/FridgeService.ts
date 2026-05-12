@@ -12,12 +12,82 @@ export const COLORS = {
 };
 
 let defaultFridgeId: string | null = null;
+
+const resolveFridgeId = (payload: any): string | null => {
+  if (!payload) return null;
+
+  if (Array.isArray(payload)) {
+    const first = payload[0];
+    if (!first) return null;
+    return first.id || first.fridgeId || null;
+  }
+
+  if (typeof payload === 'object') {
+    if (payload.id || payload.fridgeId) {
+      return payload.id || payload.fridgeId;
+    }
+
+    if (Array.isArray(payload.content) && payload.content.length > 0) {
+      return payload.content[0].id || payload.content[0].fridgeId || null;
+    }
+
+    if (Array.isArray(payload.data) && payload.data.length > 0) {
+      return payload.data[0].id || payload.data[0].fridgeId || null;
+    }
+  }
+
+  return null;
+};
+
+const resolveItemsList = (payload: any): any[] => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.content)) return payload.content;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+};
+
+const resolveProductName = (product: any): string => {
+  if (typeof product === 'string') return product;
+  if (typeof product?.name === 'string') return product.name;
+  return '';
+};
+
+
+const asErrorStatus = (error: any): number | null => {
+  const status = error?.response?.status;
+  return typeof status === 'number' ? status : null;
+};
+
+const canRetryCreatePayload = (error: any): boolean => {
+  const status = asErrorStatus(error);
+  return status === 400 || status === 422;
+};
+
+const canRetryUpdatePayload = (error: any): boolean => {
+  const status = asErrorStatus(error);
+  return status === 400 || status === 404 || status === 405 || status === 422;
+};
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isUuid = (value: string): boolean => UUID_REGEX.test(value.trim());
+
 const getDefaultFridgeId = async () => {
   if (defaultFridgeId) return defaultFridgeId;
   try {
-    const res = await apiClient.get('/fridges');
-    if (res.data && res.data.length > 0) {
-      defaultFridgeId = res.data[0].id;
+    const meRes = await apiClient.get('/fridges/me');
+    const meFridgeId = resolveFridgeId(meRes.data);
+    if (meFridgeId) {
+      defaultFridgeId = meFridgeId;
+      return defaultFridgeId;
+    }
+
+    const legacyRes = await apiClient.get('/fridges');
+    const legacyFridgeId = resolveFridgeId(legacyRes.data);
+    if (legacyFridgeId) {
+      defaultFridgeId = legacyFridgeId;
       return defaultFridgeId;
     }
   } catch (error) {
@@ -29,21 +99,35 @@ const getDefaultFridgeId = async () => {
 export const fridgeService = {
   getAll: async (): Promise<FridgeItem[]> => {
     try {
-      const fridgeId = await getDefaultFridgeId();
-      if (!fridgeId) return [];
-      
-      const response = await apiClient.get(`/fridge-items/fridge/${fridgeId}`);
-      return response.data.map((item: any) => ({
+      const meResponse = await apiClient.get('/fridge-items/me');
+      return resolveItemsList(meResponse.data).map((item: any) => ({
         id: item.id,
+        productId: item.productId || item.product_id || item.product?.id,
         quantity: item.quantity,
         expirationDate: item.expirationDate,
         status: item.status,
-        product: item.productName,
+        product: item.productName || item.product?.name || item.product,
         fridgeId: item.fridgeId
       }));
-    } catch (e) {
-      console.error('Error fetching fridge items:', e);
-      return [];
+    } catch {
+      try {
+        const fridgeId = await getDefaultFridgeId();
+        if (!fridgeId) return [];
+
+        const legacyResponse = await apiClient.get(`/fridge-items/fridge/${fridgeId}`);
+        return resolveItemsList(legacyResponse.data).map((item: any) => ({
+          id: item.id,
+          productId: item.productId || item.product_id || item.product?.id,
+          quantity: item.quantity,
+          expirationDate: item.expirationDate,
+          status: item.status,
+          product: item.productName || item.product?.name || item.product,
+          fridgeId: item.fridgeId
+        }));
+      } catch (legacyError) {
+        console.error('Error fetching fridge items:', legacyError);
+        return [];
+      }
     }
   },
 
@@ -56,50 +140,77 @@ export const fridgeService = {
 
   create: async (item: Omit<FridgeItem, 'id'>): Promise<FridgeItem | null> => {
     try {
-      let productId = '';
-      
-      const prodsRes = await apiClient.get('/products');
-      const existingProduct = prodsRes.data.find((p: any) => p.name.toLowerCase() === item.product.toLowerCase());
-      
-      if (existingProduct) {
-        productId = existingProduct.id;
-      } else {
-        const newProd = await apiClient.post('/products', {
-          name: item.product,
-          is_essential: false
-        });
-        productId = newProd.data.id;
-      }
-
-      const fridgeId = await getDefaultFridgeId();
-
-      const response = await apiClient.post('/fridge-items', {
-        productId: productId,
-        fridgeId: fridgeId,
+      const normalizedProductName = item.product.trim();
+      const payloadCamel = {
+        productName: normalizedProductName,
         quantity: item.quantity,
         expirationDate: item.expirationDate,
-        status: item.status
-      });
+        status: item.status,
+      };
+
+      const payloadSnake = {
+        product_name: normalizedProductName,
+        quantity: item.quantity,
+        expiration_date: item.expirationDate,
+        status: item.status,
+      };
+
+      const payloadNameOnly = {
+        product: normalizedProductName,
+        quantity: item.quantity,
+        expirationDate: item.expirationDate,
+        status: item.status,
+      };
+
+      let response;
+      try {
+        response = await apiClient.post('/fridge-items/me', payloadCamel);
+      } catch (createItemError: any) {
+        if (!canRetryCreatePayload(createItemError)) {
+          throw createItemError;
+        }
+
+        try {
+          response = await apiClient.post('/fridge-items/me', payloadSnake);
+        } catch (snakeError: any) {
+          if (!canRetryCreatePayload(snakeError)) {
+            throw snakeError;
+          }
+          response = await apiClient.post('/fridge-items/me', payloadNameOnly);
+        }
+      }
+
+      const responseData = response.data || {};
 
       return {
-        id: response.data.id,
-        quantity: response.data.quantity,
-        expirationDate: response.data.expirationDate,
-        status: response.data.status as ItemStatus,
-        product: response.data.productName,
-        fridgeId: response.data.fridgeId
+        id: responseData.id,
+        productId: responseData.productId || responseData.product_id || responseData.product?.id,
+        quantity: responseData.quantity,
+        expirationDate: responseData.expirationDate || responseData.expiration_date,
+        status: (responseData.status || item.status) as ItemStatus,
+        product: responseData.productName || responseData.product_name || responseData.product?.name || item.product,
+        fridgeId: responseData.fridgeId || responseData.fridge_id || item.fridgeId,
       };
-    } catch (e) {
-      console.error('Error creating fridge item:', e);
+    } catch (e: any) {
+      console.error('Error creating fridge item:', {
+        status: e?.response?.status,
+        endpoint: e?.config?.url,
+        method: e?.config?.method,
+        data: e?.response?.data,
+        message: e?.message,
+      });
       return null;
     }
   },
 
   delete: async (id: string): Promise<void> => {
     try {
-      await apiClient.delete(`/fridge-items/${id}`);
+      const endpoint = `/fridge-items/me/${id}`;
+      const payload = { itemId: id };
+
+      await apiClient.delete(endpoint, { data: payload });
     } catch (e) {
-      console.error('Error deleting fridge item:', e);
+      throw e;
     }
   },
 
@@ -110,42 +221,20 @@ export const fridgeService = {
 
   update: async (id: string, updatedData: Partial<FridgeItem>): Promise<void> => {
     try {
-      const itemRes = await apiClient.get(`/fridge-items/${id}`);
-      const current = itemRes.data;
+      const nextQuantity = Number(updatedData.quantity);
+      const nextExpirationDate = String(updatedData.expirationDate || '').trim();
+      const nextStatus = String(updatedData.status || '').toUpperCase();
+      const endpoint = `/fridge-items/me/${id}`;
+      const payload = {
+        quantity: Number(nextQuantity),
+        expirationDate: String(nextExpirationDate || '').trim(),
+        status: String(nextStatus || '').toUpperCase(),
+      };
 
-      let productId = '';
-      if (updatedData.product && updatedData.product !== current.productName) {
-         const prodsRes = await apiClient.get('/products');
-         const existingProduct = prodsRes.data.find((p: any) => p.name.toLowerCase() === updatedData.product?.toLowerCase());
-         if (existingProduct) {
-            productId = existingProduct.id;
-         } else {
-            const newProd = await apiClient.post('/products', {
-              name: updatedData.product,
-              is_essential: false
-            });
-            productId = newProd.data.id;
-         }
-      }
-
-      if (!productId) {
-         const prodsRes = await apiClient.get('/products');
-         const existingProduct = prodsRes.data.find((p: any) => p.name.toLowerCase() === current.productName.toLowerCase());
-         if (existingProduct) {
-            productId = existingProduct.id;
-         }
-      }
-
-      await apiClient.put(`/fridge-items/${id}`, {
-        productId: productId,
-        fridgeId: updatedData.fridgeId || current.fridgeId,
-        quantity: updatedData.quantity !== undefined ? updatedData.quantity : current.quantity,
-        expirationDate: updatedData.expirationDate !== undefined ? updatedData.expirationDate : current.expirationDate,
-        status: updatedData.status !== undefined ? updatedData.status : current.status
-      });
+      await apiClient.put(endpoint, payload);
 
     } catch (e) {
-      console.error('Error updating fridge item:', e);
+      throw e;
     }
   }
 };

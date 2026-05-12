@@ -1,6 +1,6 @@
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChefHat, Lock, Mail, Sparkles } from 'lucide-react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { ROUTES } from '../navigation/routes';
 import React, { useState } from 'react';
 import {
   Dimensions,
@@ -17,32 +17,33 @@ import { COLORS } from '../../../shared/theme/colors';
 import { CustomButton } from '../components/CustomButton';
 import { CustomInput } from '../components/CustomInput';
 import { useAuth } from '../hooks/useAuth';
-import { AuthStackParamList } from '../navigation/types';
-
-type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
 const { width, height } = Dimensions.get('window');
 
 const LoginScreen: React.FC = () => {
+  const params = useLocalSearchParams<{ reason?: string }>();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-  const { signIn, loading, error } = useAuth();
-  const navigation = useNavigation<LoginScreenNavigationProp>();
+  const { signIn, loading } = useAuth();
+
+  const authRedirectError =
+    params.reason === 'session-expired'
+      ? 'Tu sesion ha caducado. Inicia sesion nuevamente.'
+      : null;
 
   const handleLogin = async () => {
     if (!username || !password) return;
 
     try {
-      await signIn({ username, password });
-    } catch (e) {
-      console.log("Error de login real:", e);
+      await signIn({ username: username.trim(), password });
+    } catch {
     }
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#0D1F17" />
 
       <View style={[styles.circle, styles.circle1]} />
       <View style={[styles.circle, styles.circle2]} />
@@ -69,7 +70,9 @@ const LoginScreen: React.FC = () => {
           </View>
 
           <View style={styles.form}>
-            {error && <Text style={styles.errorText}>{error}</Text>}
+            {authRedirectError && (
+              <Text style={styles.errorText}>{authRedirectError}</Text>
+            )}
             <CustomInput
               icon={Mail}
               placeholder="Tu usuario"
@@ -100,7 +103,7 @@ const LoginScreen: React.FC = () => {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿Nuevo por aquí? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+            <TouchableOpacity onPress={() => router.push(ROUTES.authRegister)}>
               <Text style={styles.signUpText}>Crea una cuenta</Text>
             </TouchableOpacity>
           </View>
