@@ -399,7 +399,25 @@ const RegisterScreen: React.FC = () => {
 
     } catch (e: any) {
       console.error('Error finishing setup:', e);
-      setLocalError(apiError || e?.response?.data?.message || 'Error al registrarte');
+      const status = e?.response?.status;
+      const backendMessage = String(e?.response?.data?.message || e?.message || '').toLowerCase();
+
+      const looksLikeUsernameConflict =
+        (backendMessage.includes('username') && (backendMessage.includes('exists') || backendMessage.includes('use'))) ||
+        backendMessage.includes('usuario ya');
+      const looksLikeEmailConflict =
+        (backendMessage.includes('email') && (backendMessage.includes('exists') || backendMessage.includes('use'))) ||
+        backendMessage.includes('correo ya');
+
+      if (looksLikeUsernameConflict) {
+        setLocalError('Ese nombre de usuario ya esta en uso. Elige otro.');
+      } else if (looksLikeEmailConflict) {
+        setLocalError('Ese correo ya esta en uso. Prueba con otro o inicia sesion.');
+      } else if (status === 409) {
+        setLocalError('El usuario o el correo ya estan en uso.');
+      } else {
+        setLocalError(apiError || e?.response?.data?.message || 'Error al registrarte');
+      }
     } finally {
       setSaving(false);
     }
